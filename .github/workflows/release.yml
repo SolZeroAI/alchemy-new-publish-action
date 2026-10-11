@@ -44,7 +44,7 @@ jobs:
         run: nub install --frozen-lockfile
 
       - name: Version or publish
-        run: nub run tegami -- ci
+        run: nub run tegami ci
         env:
           GITHUB_TOKEN: ${{ github.token }}
 

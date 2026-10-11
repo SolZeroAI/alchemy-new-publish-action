@@ -5,7 +5,7 @@
   "description": "GitHub Action that publishes a ready archive to the alchemy.new package registry.",
   "type": "module",
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node24 --format=cjs --outfile=dist/index.cjs --banner:js=\"/* alchemy-new-publish-action */\"",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node24 --format=cjs --outfile=dist/index.cjs --banner:js=\"/* alchemy-new-publish-action */\" && node --import tsx scripts/normalize-bundle.mts",
     "check": "nub run typecheck && nub run lint && nub run format && nub run test && nub run build",
     "check-dist": "nub run build && git diff --exit-code -- dist",
     "format": "oxfmt --check",

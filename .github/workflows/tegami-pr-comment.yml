@@ -45,6 +45,6 @@ jobs:
           github-token: ${{ github.token }}
 
       - name: Post release preview
-        run: nub run tegami -- pr comment tegami-pr-preview.md
+        run: nub run tegami pr comment tegami-pr-preview.md
         env:
           GITHUB_TOKEN: ${{ github.token }}
