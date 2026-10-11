@@ -1,6 +1,6 @@
-import { DEFAULT_REGISTRY_URL } from './constants.ts'
-import { ActionError } from './errors.ts'
-import type { OnImmutable } from './upload.ts'
+import { DEFAULT_REGISTRY_URL } from "./constants.ts"
+import { ActionError } from "./errors.ts"
+import type { OnImmutable } from "./upload.ts"
 
 export interface ActionInputs {
   packageInput?: string
@@ -21,21 +21,21 @@ export interface ActionInputs {
 
 export function parseList(value: string | readonly string[] | undefined): string[] {
   const lines =
-    typeof value === 'string' || value === undefined ? (value ?? '').split(/\r?\n/) : value
-  return lines.map((line) => line.trim()).filter((line) => line.length > 0 && !line.startsWith('#'))
+    typeof value === "string" || value === undefined ? (value ?? "").split(/\r?\n/) : value
+  return lines.map((line) => line.trim()).filter((line) => line.length > 0 && !line.startsWith("#"))
 }
 
 export function parseBoolean(name: string, value: string | undefined, fallback: boolean): boolean {
-  if (value === undefined || value.trim() === '') return fallback
-  if (value === 'true' || value === 'True' || value === 'TRUE') return true
-  if (value === 'false' || value === 'False' || value === 'FALSE') return false
+  if (value === undefined || value.trim() === "") return fallback
+  if (value === "true" || value === "True" || value === "TRUE") return true
+  if (value === "false" || value === "False" || value === "FALSE") return false
   throw new ActionError(`Input ${name} must be true or false. Received ${JSON.stringify(value)}.`)
 }
 
 function blank(value: string | undefined): string | undefined {
   if (value === undefined) return undefined
   const trimmed = value.trim()
-  return trimmed === '' ? undefined : trimmed
+  return trimmed === "" ? undefined : trimmed
 }
 
 export function parseActionInputs(raw: {
@@ -54,8 +54,8 @@ export function parseActionInputs(raw: {
   dryRun?: string
   onImmutable?: string
 }): ActionInputs {
-  const onImmutable = blank(raw.onImmutable) ?? 'fail'
-  if (onImmutable !== 'fail' && onImmutable !== 'skip-if-digest-matches') {
+  const onImmutable = blank(raw.onImmutable) ?? "fail"
+  if (onImmutable !== "fail" && onImmutable !== "skip-if-digest-matches") {
     throw new ActionError(
       `Input on-immutable must be "fail" or "skip-if-digest-matches". Received ${JSON.stringify(onImmutable)}.`,
     )
@@ -70,10 +70,10 @@ export function parseActionInputs(raw: {
     ...(blank(raw.manifest) ? { manifest: blank(raw.manifest) } : {}),
     include: parseList(raw.include),
     exclude: parseList(raw.exclude),
-    defaultExcludes: parseBoolean('default-excludes', raw.defaultExcludes, true),
+    defaultExcludes: parseBoolean("default-excludes", raw.defaultExcludes, true),
     registryUrl: blank(raw.registryUrl) ?? DEFAULT_REGISTRY_URL,
     ...(blank(raw.token) ? { token: blank(raw.token) } : {}),
-    dryRun: parseBoolean('dry-run', raw.dryRun, false),
+    dryRun: parseBoolean("dry-run", raw.dryRun, false),
     onImmutable,
   }
 }

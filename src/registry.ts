@@ -1,9 +1,9 @@
-import { USER_AGENT } from './constants.ts'
-import { ActionError, RegistryError } from './errors.ts'
-import type { Logger } from './log.ts'
-import { silentLogger, redact } from './log.ts'
-import { isRecord, stringField } from './record.ts'
-import { withRetry, type Sleep, sleep } from './retry.ts'
+import { USER_AGENT } from "./constants.ts"
+import { ActionError, RegistryError } from "./errors.ts"
+import type { Logger } from "./log.ts"
+import { silentLogger, redact } from "./log.ts"
+import { isRecord, stringField } from "./record.ts"
+import { withRetry, type Sleep, sleep } from "./retry.ts"
 
 export interface VersionRecord {
   org: string
@@ -87,19 +87,19 @@ export function normalizeRegistryUrl(input: string): string {
   } catch {
     throw new ActionError(`registry-url ${JSON.stringify(input)} is not an absolute URL.`)
   }
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-    throw new ActionError('registry-url must be http or https.')
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new ActionError("registry-url must be http or https.")
   }
   if (url.username || url.password) {
-    throw new ActionError('registry-url must not include credentials.')
+    throw new ActionError("registry-url must not include credentials.")
   }
-  if (url.pathname !== '/' && url.pathname !== '') {
+  if (url.pathname !== "/" && url.pathname !== "") {
     throw new ActionError(
-      'registry-url must be the API origin without a path. The action appends /v1/....',
+      "registry-url must be the API origin without a path. The action appends /v1/....",
     )
   }
   if (url.search || url.hash) {
-    throw new ActionError('registry-url must not include a query or hash.')
+    throw new ActionError("registry-url must not include a query or hash.")
   }
   return url.origin
 }
@@ -112,7 +112,7 @@ export function createRegistryClient(options: RegistryClientOptions): RegistryCl
   const fetchImpl = options.fetchImpl ?? fetch
   const log = options.log ?? silentLogger
   const sleepFn = options.sleep ?? sleep
-  let token = ''
+  let token = ""
 
   async function request(
     method: string,
@@ -126,31 +126,31 @@ export function createRegistryClient(options: RegistryClientOptions): RegistryCl
     } = {},
   ): Promise<{ status: number; headers: Headers; text: string }> {
     const headers = new Headers()
-    headers.set('Accept', 'application/json')
-    headers.set('User-Agent', USER_AGENT)
-    if (init.auth !== false && token) headers.set('Authorization', `Bearer ${token}`)
+    headers.set("Accept", "application/json")
+    headers.set("User-Agent", USER_AGENT)
+    if (init.auth !== false && token) headers.set("Authorization", `Bearer ${token}`)
     const body = init.json !== undefined ? JSON.stringify(init.json) : init.body
     if (init.json !== undefined) {
-      headers.set('Content-Type', 'application/json')
+      headers.set("Content-Type", "application/json")
     } else if (init.contentType) {
-      headers.set('Content-Type', init.contentType)
+      headers.set("Content-Type", init.contentType)
     }
-    if (typeof body === 'string') headers.set('Content-Length', String(Buffer.byteLength(body)))
-    if (Buffer.isBuffer(body)) headers.set('Content-Length', String(body.length))
+    if (typeof body === "string") headers.set("Content-Length", String(Buffer.byteLength(body)))
+    if (Buffer.isBuffer(body)) headers.set("Content-Length", String(body.length))
     let response: Response
     try {
       response = await fetchImpl(`${options.registryUrl}${path}`, {
         method,
         headers,
         body,
-        redirect: 'error',
+        redirect: "error",
         signal: AbortSignal.timeout(init.timeoutMs ?? 30_000),
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       if (/redirect/i.test(message)) {
         throw new RegistryError(
-          'The registry URL redirected. The action does not follow redirects with credentials.',
+          "The registry URL redirected. The action does not follow redirects with credentials.",
           0,
         )
       }
@@ -162,10 +162,15 @@ export function createRegistryClient(options: RegistryClientOptions): RegistryCl
 
   function fail(status: number, text: string, headers: Headers, context: string): never {
     const parsed = parseErrorBody(text)
-    const retryAfterMs = parseRetryAfter(headers.get('retry-after'))
+    const retryAfterMs = parseRetryAfter(headers.get("retry-after"))
     const code = parsed?.code
-    const detail = parsed?.message ?? (text.trim() || 'empty response')
-    throw new RegistryError(redact(`${context}: ${explain(status, code, detail)}`), status, code, retryAfterMs)
+    const detail = parsed?.message ?? (text.trim() || "empty response")
+    throw new RegistryError(
+      redact(`${context}: ${explain(status, code, detail)}`),
+      status,
+      code,
+      retryAfterMs,
+    )
   }
 
   return {
@@ -176,33 +181,33 @@ export function createRegistryClient(options: RegistryClientOptions): RegistryCl
       // The contract puts the GitHub JWT in the JSON body. Do not also send it
       // as Authorization: the registry would treat that header as an anr_/anu_ credential.
       const run = () =>
-        request('POST', '/v1/oidc/github/exchange', {
+        request("POST", "/v1/oidc/github/exchange", {
           json: { token: input.token, org: input.org, project: input.project },
           auth: false,
         })
       const response = await withRetry(
-        'OIDC exchange',
+        "OIDC exchange",
         async () => {
           const result = await run()
           if (result.status !== 200) {
-            fail(result.status, result.text, result.headers, 'OIDC exchange failed')
+            fail(result.status, result.text, result.headers, "OIDC exchange failed")
           }
           return result
         },
         log,
         sleepFn,
       )
-      const body = parseJson(response.text, 'OIDC exchange')
-      const grant = stringField(body, 'token')
-      const expiresAt = stringField(body, 'expiresAt')
+      const body = parseJson(response.text, "OIDC exchange")
+      const grant = stringField(body, "token")
+      const expiresAt = stringField(body, "expiresAt")
       if (!grant || !expiresAt) {
-        throw new RegistryError('OIDC exchange returned no token or expiresAt.', response.status)
+        throw new RegistryError("OIDC exchange returned no token or expiresAt.", response.status)
       }
       return {
         token: grant,
         expiresAt,
-        org: stringField(body, 'org') ?? input.org,
-        project: stringField(body, 'project') ?? input.project,
+        org: stringField(body, "org") ?? input.org,
+        project: stringField(body, "project") ?? input.project,
       }
     },
     async getVersion(org, project, version) {
@@ -210,7 +215,7 @@ export function createRegistryClient(options: RegistryClientOptions): RegistryCl
       const response = await withRetry(
         `GET ${path}`,
         async () => {
-          const result = await request('GET', path, { auth: Boolean(token) })
+          const result = await request("GET", path, { auth: Boolean(token) })
           if (result.status !== 200 && result.status !== 404) {
             fail(result.status, result.text, result.headers, `GET ${path} failed`)
           }
@@ -220,31 +225,31 @@ export function createRegistryClient(options: RegistryClientOptions): RegistryCl
         sleepFn,
       )
       if (response.status === 404) return undefined
-      return parseVersionRecord(parseJson(response.text, 'version lookup'), org, project, version)
+      return parseVersionRecord(parseJson(response.text, "version lookup"), org, project, version)
     },
     async startUpload(org, project, version) {
       const path = `${packageVersionPath(org, project, version)}/uploads`
       const response = await withRetry(
         `start upload ${org}/${project}@${version}`,
         async () => {
-          const result = await request('POST', path)
+          const result = await request("POST", path)
           if (result.status !== 200) {
-            fail(result.status, result.text, result.headers, 'Starting the upload failed')
+            fail(result.status, result.text, result.headers, "Starting the upload failed")
           }
           return result
         },
         log,
         sleepFn,
       )
-      const body = parseJson(response.text, 'start upload')
-      const uploadId = stringField(body, 'uploadId')
+      const body = parseJson(response.text, "start upload")
+      const uploadId = stringField(body, "uploadId")
       const partSize = body.partSize
       const maxBytes = body.maxBytes
-      if (!uploadId || typeof partSize !== 'number' || typeof maxBytes !== 'number') {
-        throw new RegistryError('Start upload returned no uploadId, partSize, or maxBytes.', 200)
+      if (!uploadId || typeof partSize !== "number" || typeof maxBytes !== "number") {
+        throw new RegistryError("Start upload returned no uploadId, partSize, or maxBytes.", 200)
       }
-      const contentType = stringField(body, 'contentType')
-      const expiresAt = stringField(body, 'expiresAt')
+      const contentType = stringField(body, "contentType")
+      const expiresAt = stringField(body, "expiresAt")
       return {
         uploadId,
         partSize,
@@ -258,14 +263,19 @@ export function createRegistryClient(options: RegistryClientOptions): RegistryCl
       const response = await withRetry(
         `upload part ${input.partNumber}`,
         async () => {
-          const result = await request('PUT', path, {
+          const result = await request("PUT", path, {
             body: input.body,
             // A part is a slice of the gzip archive, not a gzip member of its own.
-            contentType: 'application/octet-stream',
+            contentType: "application/octet-stream",
             timeoutMs: 120_000,
           })
           if (result.status !== 200) {
-            fail(result.status, result.text, result.headers, `Uploading part ${input.partNumber} failed`)
+            fail(
+              result.status,
+              result.text,
+              result.headers,
+              `Uploading part ${input.partNumber} failed`,
+            )
           }
           return result
         },
@@ -273,36 +283,36 @@ export function createRegistryClient(options: RegistryClientOptions): RegistryCl
         sleepFn,
       )
       const body = parseJson(response.text, `part ${input.partNumber}`)
-      const etag = stringField(body, 'etag')
+      const etag = stringField(body, "etag")
       if (!etag) {
         throw new RegistryError(`Part ${input.partNumber} returned no etag.`, 200)
       }
-      const sizeBytes = typeof body.sizeBytes === 'number' ? body.sizeBytes : input.body.length
-      const partNumber = typeof body.partNumber === 'number' ? body.partNumber : input.partNumber
+      const sizeBytes = typeof body.sizeBytes === "number" ? body.sizeBytes : input.body.length
+      const partNumber = typeof body.partNumber === "number" ? body.partNumber : input.partNumber
       return { partNumber, etag, sizeBytes }
     },
     async uploadManifest(input) {
       const path = `${packageVersionPath(input.org, input.project, input.version)}/uploads/${encodeURIComponent(input.uploadId)}/manifest`
       const response = await withRetry(
-        'upload manifest',
+        "upload manifest",
         async () => {
-          const result = await request('PUT', path, {
+          const result = await request("PUT", path, {
             body: input.body,
-            contentType: 'application/json',
+            contentType: "application/json",
             timeoutMs: 60_000,
           })
           if (result.status !== 200) {
-            fail(result.status, result.text, result.headers, 'Uploading the manifest failed')
+            fail(result.status, result.text, result.headers, "Uploading the manifest failed")
           }
           return result
         },
         log,
         sleepFn,
       )
-      const body = parseJson(response.text, 'manifest upload')
-      const sha256 = stringField(body, 'sha256') ?? ''
-      const sizeBytes = typeof body.sizeBytes === 'number' ? body.sizeBytes : input.body.length
-      const contentType = stringField(body, 'contentType')
+      const body = parseJson(response.text, "manifest upload")
+      const sha256 = stringField(body, "sha256") ?? ""
+      const sizeBytes = typeof body.sizeBytes === "number" ? body.sizeBytes : input.body.length
+      const contentType = stringField(body, "contentType")
       return {
         sha256,
         sizeBytes,
@@ -312,9 +322,9 @@ export function createRegistryClient(options: RegistryClientOptions): RegistryCl
     async completeUpload(input) {
       const path = `${packageVersionPath(input.org, input.project, input.version)}/uploads/${encodeURIComponent(input.uploadId)}/complete`
       const response = await withRetry(
-        'complete upload',
+        "complete upload",
         async () => {
-          const result = await request('POST', path, {
+          const result = await request("POST", path, {
             json: {
               sha256: input.sha256,
               manifestSha256: input.manifestSha256,
@@ -322,7 +332,7 @@ export function createRegistryClient(options: RegistryClientOptions): RegistryCl
             },
           })
           if (result.status !== 200) {
-            fail(result.status, result.text, result.headers, 'Completing the upload failed')
+            fail(result.status, result.text, result.headers, "Completing the upload failed")
           }
           return result
         },
@@ -330,7 +340,7 @@ export function createRegistryClient(options: RegistryClientOptions): RegistryCl
         sleepFn,
       )
       return parseVersionRecord(
-        parseJson(response.text, 'complete upload'),
+        parseJson(response.text, "complete upload"),
         input.org,
         input.project,
         input.version,
@@ -338,9 +348,9 @@ export function createRegistryClient(options: RegistryClientOptions): RegistryCl
     },
     async abortUpload(org, project, version, uploadId) {
       const path = `${packageVersionPath(org, project, version)}/uploads/${encodeURIComponent(uploadId)}/abort`
-      const response = await request('POST', path, { timeoutMs: 30_000 })
+      const response = await request("POST", path, { timeoutMs: 30_000 })
       if (response.status !== 200) {
-        fail(response.status, response.text, response.headers, 'Aborting the upload failed')
+        fail(response.status, response.text, response.headers, "Aborting the upload failed")
       }
     },
   }
@@ -349,7 +359,7 @@ export function createRegistryClient(options: RegistryClientOptions): RegistryCl
 function parseJson(text: string, label: string): Record<string, unknown> {
   try {
     const value = JSON.parse(text) as unknown
-    if (!isRecord(value)) throw new Error('response was not a JSON object')
+    if (!isRecord(value)) throw new Error("response was not a JSON object")
     return value
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
@@ -361,8 +371,8 @@ function parseErrorBody(text: string): { message?: string; code?: string } | und
   try {
     const value = JSON.parse(text) as unknown
     if (!isRecord(value)) return undefined
-    const message = stringField(value, 'message')
-    const code = stringField(value, 'code')
+    const message = stringField(value, "message")
+    const code = stringField(value, "code")
     return {
       ...(message ? { message } : {}),
       ...(code ? { code } : {}),
@@ -379,17 +389,17 @@ export function parseVersionRecord(
   version: string,
 ): VersionRecord {
   return {
-    org: stringField(body, 'org') ?? org,
-    project: stringField(body, 'project') ?? project,
-    version: stringField(body, 'version') ?? version,
-    sha256: stringField(body, 'sha256') ?? '',
-    ...(stringField(body, 'manifestSha256')
-      ? { manifestSha256: stringField(body, 'manifestSha256') }
+    org: stringField(body, "org") ?? org,
+    project: stringField(body, "project") ?? project,
+    version: stringField(body, "version") ?? version,
+    sha256: stringField(body, "sha256") ?? "",
+    ...(stringField(body, "manifestSha256")
+      ? { manifestSha256: stringField(body, "manifestSha256") }
       : {}),
-    sizeBytes: typeof body.sizeBytes === 'number' ? body.sizeBytes : 0,
-    ...(stringField(body, 'contentType') ? { contentType: stringField(body, 'contentType') } : {}),
+    sizeBytes: typeof body.sizeBytes === "number" ? body.sizeBytes : 0,
+    ...(stringField(body, "contentType") ? { contentType: stringField(body, "contentType") } : {}),
     yanked: body.yanked === true,
-    ...(stringField(body, 'publishedAt') ? { publishedAt: stringField(body, 'publishedAt') } : {}),
+    ...(stringField(body, "publishedAt") ? { publishedAt: stringField(body, "publishedAt") } : {}),
   }
 }
 
@@ -404,43 +414,43 @@ function parseRetryAfter(header: string | null): number | undefined {
 
 export function explain(status: number, code: string | undefined, detail: string): string {
   switch (code) {
-    case 'publisher_not_allowed':
+    case "publisher_not_allowed":
       return `This GitHub repository is not allowlisted for the package. On https://alchemy.new/packages, add a trusted publisher for the repository and workflow. ${detail}`
-    case 'oidc_invalid':
+    case "oidc_invalid":
       return `The registry rejected the GitHub OIDC token. Check the audience, id-token: write, and any workflow, environment, or ref allowlist. ${detail}`
-    case 'unauthorized':
+    case "unauthorized":
       return `The registry did not accept the credential. ${detail}`
-    case 'token_expired':
+    case "token_expired":
       return `The registry credential has expired. OIDC grants last 15 minutes; mint a new anr_ token if you passed one. ${detail}`
-    case 'token_revoked':
+    case "token_revoked":
       return `The API token was revoked. ${detail}`
-    case 'forbidden':
+    case "forbidden":
       return `The credential cannot publish this package. ${detail}`
-    case 'not_found':
+    case "not_found":
       return `Org, package, version, or upload was not found. Create the org and package at https://alchemy.new/packages. ${detail}`
-    case 'immutable_version':
+    case "immutable_version":
       return `That version is already published and versions are immutable. ${detail}`
-    case 'invalid_version':
+    case "invalid_version":
       return `The version is not exact semver without build metadata. ${detail}`
-    case 'invalid_archive':
+    case "invalid_archive":
       return `The registry rejected the archive. It must be a gzip tar of the package root with the entrypoint and node_modules/alchemy/bin/cli.js, and without a root alchemy.new.jsonc, .git, or secret files. The manifest is uploaded separately. ${detail}`
-    case 'invalid_manifest':
+    case "invalid_manifest":
       return `The registry rejected the manifest. Check schema version 1, source.kind "registry", and that org, project, and source.version match this publish. ${detail}`
-    case 'manifest_required':
+    case "manifest_required":
       return `Complete ran before the manifest was uploaded. Upload alchemy.new.jsonc to the manifest endpoint, then complete. ${detail}`
-    case 'manifest_too_large':
+    case "manifest_too_large":
       return `The manifest is over the 256 KB limit. ${detail}`
-    case 'invalid_content_type':
+    case "invalid_content_type":
       return `The registry rejected the content type. Archive parts must be application/octet-stream or application/gzip. The manifest must be application/json or application/octet-stream. ${detail}`
-    case 'archive_too_large':
+    case "archive_too_large":
       return `The archive or a part exceeds the registry cap (256 MiB archive, 8 MiB part). ${detail}`
-    case 'digest_mismatch':
+    case "digest_mismatch":
       return `The registry digest does not match the uploaded archive or the uploaded manifest. ${detail}`
-    case 'upload_expired':
+    case "upload_expired":
       return `The upload window elapsed before completion. Re-run the job. ${detail}`
-    case 'rate_limited':
+    case "rate_limited":
       return `The registry rate limit was hit. ${detail}`
     default:
-      return `HTTP ${status}${code ? ` ${code}` : ''}. ${detail}`
+      return `HTTP ${status}${code ? ` ${code}` : ""}. ${detail}`
   }
 }

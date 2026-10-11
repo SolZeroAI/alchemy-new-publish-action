@@ -1,16 +1,26 @@
-name: CI
+name: Validate
 
 on:
-  push:
   pull_request:
+    branches:
+      - master
+  push:
+    branches:
+      - master
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: validate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  verify:
-    name: Test, lint, and check dist
+  validate:
+    name: Typecheck, lint, format, and check dist
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -22,9 +32,10 @@ jobs:
         with:
           nub-version: "0.9.6"
           node-version-file: .node-version
+          cache-dependency-path: nub.lock
 
       - name: Install
-        run: nub ci
+        run: nub install --frozen-lockfile
 
       - name: Typecheck
         run: nub run typecheck
@@ -32,14 +43,14 @@ jobs:
       - name: Lint
         run: nub run lint
 
+      - name: Check formatting
+        run: nub run format
+
       - name: Test
         run: nub run test
 
-      - name: Build dist
-        run: nub run build
-
       - name: Check dist is up to date
-        run: git diff --exit-code -- dist
+        run: nub run check-dist
 
       - name: Dry-run the bundle against a fixture
         run: node scripts/ci-dry-run.mjs
@@ -59,9 +70,10 @@ jobs:
         with:
           nub-version: "0.9.6"
           node-version-file: .node-version
+          cache-dependency-path: nub.lock
 
       - name: Install
-        run: nub ci
+        run: nub install --frozen-lockfile
 
       - name: Pack a tree over 256 MiB uncompressed
         run: node --import tsx scripts/pack-large.mjs

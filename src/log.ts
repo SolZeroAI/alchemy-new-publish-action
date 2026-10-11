@@ -10,9 +10,9 @@ export const silentLogger: Logger = {
 
 export function redact(value: string): string {
   return value
-    .replace(/anu_[A-Za-z0-9._~+/-]+=*/g, 'anu_[redacted]')
-    .replace(/anr_[A-Za-z0-9._~+/-]+=*/g, 'anr_[redacted]')
-    .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '[jwt redacted]')
+    .replace(/anu_[A-Za-z0-9._~+/-]+=*/g, "anu_[redacted]")
+    .replace(/anr_[A-Za-z0-9._~+/-]+=*/g, "anr_[redacted]")
+    .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "[jwt redacted]")
 }
 
 export function redactingLogger(logger: Logger): Logger {

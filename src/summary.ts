@@ -1,5 +1,5 @@
-import { formatBytes } from './bytes.ts'
-import { DEPLOY_SITE } from './constants.ts'
+import { formatBytes } from "./bytes.ts"
+import { DEPLOY_SITE } from "./constants.ts"
 
 export interface SummaryInfo {
   org: string
@@ -22,34 +22,38 @@ export interface SummaryInfo {
 const LIST_CAP = 200
 
 function escapeMd(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/`/g, '\\`')
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/`/g, "\\`")
 }
 
 function listBlock(title: string, paths: string[], total: number): string {
   const shown = paths.slice(0, LIST_CAP)
-  const lines = [`### ${title}`, '']
+  const lines = [`### ${title}`, ""]
   if (shown.length === 0) {
-    lines.push('None.')
+    lines.push("None.")
   } else {
     for (const path of shown) lines.push(`- \`${escapeMd(path)}\``)
   }
   if (total > shown.length) {
-    lines.push('', `And ${total - shown.length} more.`)
+    lines.push("", `And ${total - shown.length} more.`)
   }
-  return lines.join('\n')
+  return lines.join("\n")
 }
 
 export function renderSummary(info: SummaryInfo): string {
   const result = info.dryRun
-    ? 'Dry run. Nothing was uploaded.'
+    ? "Dry run. Nothing was uploaded."
     : info.skipped
-      ? 'Skipped. This version is already published with the same digests.'
-      : 'Published.'
+      ? "Skipped. This version is already published with the same digests."
+      : "Published."
   const lines = [
-    '## alchemy.new publish',
-    '',
-    '| | |',
-    '| --- | --- |',
+    "## alchemy.new publish",
+    "",
+    "| | |",
+    "| --- | --- |",
     `| Package | \`${escapeMd(info.org)}/${escapeMd(info.project)}\` |`,
     `| Version | \`${escapeMd(info.version)}\` |`,
     `| Size | ${formatBytes(info.sizeBytes)} (${info.sizeBytes} bytes) |`,
@@ -62,16 +66,18 @@ export function renderSummary(info: SummaryInfo): string {
     `| Registry | ${info.registryUrl} |`,
   ]
   if (info.overRecommended) {
-    lines.push(`| Warning | Archive is above the 80 MiB publisher target. The hard cap is 256 MiB. |`)
+    lines.push(
+      `| Warning | Archive is above the 80 MiB publisher target. The hard cap is 256 MiB. |`,
+    )
   }
   lines.push(
-    '',
-    listBlock('Packed files', info.files, info.fileCount),
-    '',
-    listBlock('Excluded', info.excluded, info.excludedCount),
-    '',
+    "",
+    listBlock("Packed files", info.files, info.fileCount),
+    "",
+    listBlock("Excluded", info.excluded, info.excludedCount),
+    "",
   )
-  return lines.join('\n')
+  return lines.join("\n")
 }
 
 export function deployUrl(org: string, project: string, version: string): string {

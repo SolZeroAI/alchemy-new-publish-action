@@ -1,5 +1,5 @@
-import { RegistryError } from './errors.ts'
-import type { Logger } from './log.ts'
+import { RegistryError } from "./errors.ts"
+import type { Logger } from "./log.ts"
 
 export type Sleep = (ms: number) => Promise<void>
 
@@ -14,7 +14,7 @@ const TRANSIENT_STATUS = new Set([408, 429, 500, 502, 503, 504])
 export function isTransient(error: unknown): boolean {
   if (error instanceof RegistryError) return TRANSIENT_STATUS.has(error.status)
   if (error instanceof Error) {
-    if (error.name === 'TimeoutError' || error.name === 'AbortError') return true
+    if (error.name === "TimeoutError" || error.name === "AbortError") return true
     return /fetch failed|network|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket hang up/i.test(error.message)
   }
   return false

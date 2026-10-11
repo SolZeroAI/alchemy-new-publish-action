@@ -36,7 +36,7 @@ inputs:
   default-excludes:
     description: Drop VCS metadata, secrets, tests, caches, and dev junk before packing. Hard-rejected files still fail the run.
     required: false
-    default: 'true'
+    default: "true"
   registry-url:
     description: Registry API origin. The action appends /v1/.... The website at alchemy.new does not serve this API.
     required: false
@@ -47,9 +47,9 @@ inputs:
   dry-run:
     description: Pack, validate, hash, and write the summary without calling the registry.
     required: false
-    default: 'false'
+    default: "false"
   on-immutable:
-    description: 'When the version is already published: fail, or skip-if-digest-matches. Skip compares the archive sha256 and, when the version record includes it, the manifest sha256.'
+    description: "When the version is already published: fail, or skip-if-digest-matches. Skip compares the archive sha256 and, when the version record includes it, the manifest sha256."
     required: false
     default: fail
 outputs:

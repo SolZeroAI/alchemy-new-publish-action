@@ -97,34 +97,34 @@ Paste an `anr_` token only. An `anu_` grant cannot be pasted into `token`. The a
 
 ## Inputs
 
-| Input | Default | Description |
-| --- | --- | --- |
-| `package` | manifest `source` | `org/project`. Must match `alchemy.new.jsonc`. |
-| `org` | manifest `source.org` | Registry org. Must match the manifest when both are set. |
-| `project` | manifest `source.project` | Registry project. Must match the manifest when both are set. |
-| `version` | git tag, then `source.version` | Exact semver without build metadata. A tag `v1.2.3` becomes `1.2.3`. |
-| `archive` | | Prebuilt `.tar.gz` whose root is the package root. Mutually exclusive with `path`. |
-| `path` | workspace, when `archive` is omitted | Directory to pack. |
-| `manifest` | `alchemy.new.jsonc` at the package root | Raw manifest file. Uploaded separately. Comments are kept. At most 256 KB. |
-| `include` | pack the directory | Newline-separated gitignore patterns. Only matching paths are considered. |
-| `exclude` | | Extra gitignore patterns, dropped in addition to the defaults. |
-| `default-excludes` | `true` | Drop VCS metadata, secrets, tests, caches, and dev junk. |
-| `registry-url` | production API origin | API origin. The action appends `/v1/...`. |
-| `token` | OIDC exchange | `anr_` API token. |
-| `dry-run` | `false` | Validate and write the summary. Do not call the registry. |
-| `on-immutable` | `fail` | `fail`, or `skip-if-digest-matches` when the archive sha256 matches and the manifest sha256 matches if the version record has one. |
+| Input              | Default                                 | Description                                                                                                                        |
+| ------------------ | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `package`          | manifest `source`                       | `org/project`. Must match `alchemy.new.jsonc`.                                                                                     |
+| `org`              | manifest `source.org`                   | Registry org. Must match the manifest when both are set.                                                                           |
+| `project`          | manifest `source.project`               | Registry project. Must match the manifest when both are set.                                                                       |
+| `version`          | git tag, then `source.version`          | Exact semver without build metadata. A tag `v1.2.3` becomes `1.2.3`.                                                               |
+| `archive`          |                                         | Prebuilt `.tar.gz` whose root is the package root. Mutually exclusive with `path`.                                                 |
+| `path`             | workspace, when `archive` is omitted    | Directory to pack.                                                                                                                 |
+| `manifest`         | `alchemy.new.jsonc` at the package root | Raw manifest file. Uploaded separately. Comments are kept. At most 256 KB.                                                         |
+| `include`          | pack the directory                      | Newline-separated gitignore patterns. Only matching paths are considered.                                                          |
+| `exclude`          |                                         | Extra gitignore patterns, dropped in addition to the defaults.                                                                     |
+| `default-excludes` | `true`                                  | Drop VCS metadata, secrets, tests, caches, and dev junk.                                                                           |
+| `registry-url`     | production API origin                   | API origin. The action appends `/v1/...`.                                                                                          |
+| `token`            | OIDC exchange                           | `anr_` API token.                                                                                                                  |
+| `dry-run`          | `false`                                 | Validate and write the summary. Do not call the registry.                                                                          |
+| `on-immutable`     | `fail`                                  | `fail`, or `skip-if-digest-matches` when the archive sha256 matches and the manifest sha256 matches if the version record has one. |
 
 `include` and `exclude` accept `#` comments on their own lines.
 
 ## Outputs
 
-| Output | Description |
-| --- | --- |
-| `version` | Published version, without a leading `v`. |
-| `sha256` | Lowercase hex sha256 of the archive. |
-| `manifest-sha256` | Lowercase hex sha256 of the raw manifest bytes, including comments. |
-| `size` | Archive size in bytes. |
-| `url` | Deploy URL, `https://alchemy.new/?package=org/project&version=1.2.3`. |
+| Output            | Description                                                           |
+| ----------------- | --------------------------------------------------------------------- |
+| `version`         | Published version, without a leading `v`.                             |
+| `sha256`          | Lowercase hex sha256 of the archive.                                  |
+| `manifest-sha256` | Lowercase hex sha256 of the raw manifest bytes, including comments.   |
+| `size`            | Archive size in bytes.                                                |
+| `url`             | Deploy URL, `https://alchemy.new/?package=org/project&version=1.2.3`. |
 
 The job summary lists the archive size, both digests, packed files, and paths the packer excluded. It also says `alchemy.new.jsonc` is not in the archive. A dry run sets the same outputs from the local files.
 
@@ -191,15 +191,15 @@ with:
 
 ## Registry calls
 
-| Step | Request |
-| --- | --- |
-| Exchange a GitHub OIDC token | `POST /v1/oidc/github/exchange` with `{ token, org, project }` and no `Authorization` header |
-| See whether the version exists | `GET /v1/packages/{org}/{project}/versions/{version}` |
-| Start a multipart upload | `POST /v1/packages/{org}/{project}/versions/{version}/uploads` |
-| Upload the manifest | `PUT .../uploads/{uploadId}/manifest` with the raw file bytes and `Content-Type: application/json` |
-| Upload each part | `PUT .../uploads/{uploadId}/parts/{partNumber}` with `Content-Type: application/octet-stream` |
-| Finish | `POST .../complete` with `{ sha256, manifestSha256, parts: [{ partNumber, etag }] }` |
-| Give up after a failed upload | `POST .../abort` |
+| Step                           | Request                                                                                            |
+| ------------------------------ | -------------------------------------------------------------------------------------------------- |
+| Exchange a GitHub OIDC token   | `POST /v1/oidc/github/exchange` with `{ token, org, project }` and no `Authorization` header       |
+| See whether the version exists | `GET /v1/packages/{org}/{project}/versions/{version}`                                              |
+| Start a multipart upload       | `POST /v1/packages/{org}/{project}/versions/{version}/uploads`                                     |
+| Upload the manifest            | `PUT .../uploads/{uploadId}/manifest` with the raw file bytes and `Content-Type: application/json` |
+| Upload each part               | `PUT .../uploads/{uploadId}/parts/{partNumber}` with `Content-Type: application/octet-stream`      |
+| Finish                         | `POST .../complete` with `{ sha256, manifestSha256, parts: [{ partNumber, etag }] }`               |
+| Give up after a failed upload  | `POST .../abort`                                                                                   |
 
 The manifest goes up after the upload starts and before the parts. A second PUT before complete would replace it. Complete without a manifest returns `manifest_required`. Parts use the `partSize` from the start response. A small archive is one part. Every part is at most 8 MiB, and every part except the last is at least 5 MiB. Transient HTTP 408, 429, 500, 502, 503, and 504 responses, and network failures, retry up to four times with backoff. A `Retry-After` header is honored. Both digests are computed locally and sent on complete. The registry hashes the objects again.
 
@@ -225,6 +225,6 @@ Other readings, where the contract was loose:
 
 ## Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). The action is JavaScript for Node 24, bundled to `dist/index.cjs`. Dependencies install with nub. CI typechecks, lints, tests, and fails if the bundle is stale. It also dry-runs the bundle against `fixtures/ready-package`, checks that a prebuilt archive containing `.git` is rejected, and checks that a prebuilt archive with `alchemy.new.jsonc` at its root is rejected. Releases are cut by Tegami on `master`. The floating `v1` tag moves only for a stable 1.x release.
+See [CONTRIBUTING.md](CONTRIBUTING.md). The action is JavaScript for the `node24` runner, bundled to `dist/index.cjs`. Development uses Node 24.15.0 and nub 0.9.6. CI typechecks, lints with oxlint, checks formatting with oxfmt, tests, and fails if the bundle is stale. It also dry-runs the bundle against `fixtures/ready-package`, checks that a prebuilt archive containing `.git` is rejected, and checks that a prebuilt archive with `alchemy.new.jsonc` at its root is rejected. Releases are cut by Tegami after Validate succeeds on `master`. The floating `v1` tag moves only for a stable 1.x release.
 
 [Security reports](SECURITY.md) go through GitHub private vulnerability reporting.

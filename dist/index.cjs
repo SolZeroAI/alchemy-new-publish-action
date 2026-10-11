@@ -21595,7 +21595,9 @@ function parseManifest(text, filename = "alchemy.new.jsonc") {
     throw new ActionError(`${filename} deployment must be an object.`);
   }
   if (!Array.isArray(value.parameters)) {
-    throw new ActionError(`${filename} parameters must be an array. Use [] when the stack needs no project env.`);
+    throw new ActionError(
+      `${filename} parameters must be an array. Use [] when the stack needs no project env.`
+    );
   }
   const providers = deployment.providers;
   if (!Array.isArray(providers) || providers.some((item) => typeof item !== "string" || !PROVIDERS.has(item))) {
@@ -21645,9 +21647,7 @@ function parsePackage(input) {
   const trimmed = input.trim();
   const slash = trimmed.indexOf("/");
   if (slash <= 0 || trimmed.indexOf("/", slash + 1) !== -1) {
-    throw new ActionError(
-      `Package must be org/project. Received ${JSON.stringify(trimmed)}.`
-    );
+    throw new ActionError(`Package must be org/project. Received ${JSON.stringify(trimmed)}.`);
   }
   return {
     org: assertSegment(trimmed.slice(0, slash), "org"),
@@ -21714,7 +21714,15 @@ var EDITOR_OR_CI = /* @__PURE__ */ new Set([
   ".vscode",
   ".idea"
 ]);
-var TEST_DIRS = /* @__PURE__ */ new Set(["__tests__", "__mocks__", "coverage", ".nyc_output", ".pytest_cache", "test", "tests"]);
+var TEST_DIRS = /* @__PURE__ */ new Set([
+  "__tests__",
+  "__mocks__",
+  "coverage",
+  ".nyc_output",
+  ".pytest_cache",
+  "test",
+  "tests"
+]);
 var TEST_FILE = /\.(?:test|spec)\.[^.]+$/;
 function isSecretEnvFile(base) {
   if (base === ".env") return true;
@@ -26332,10 +26340,8 @@ function assertSafeEntries(entries) {
     }
   }
   if (problems.length > 0) {
-    throw new ActionError(
-      `Archive failed safety checks:
-${problems.slice(0, 20).join("\n")}`
-    );
+    throw new ActionError(`Archive failed safety checks:
+${problems.slice(0, 20).join("\n")}`);
   }
 }
 function assertNoRootManifest(entries) {
@@ -26474,7 +26480,12 @@ function createRegistryClient(options) {
     const retryAfterMs = parseRetryAfter(headers.get("retry-after"));
     const code = parsed?.code;
     const detail = parsed?.message ?? (text.trim() || "empty response");
-    throw new RegistryError(redact(`${context}: ${explain(status, code, detail)}`), status, code, retryAfterMs);
+    throw new RegistryError(
+      redact(`${context}: ${explain(status, code, detail)}`),
+      status,
+      code,
+      retryAfterMs
+    );
   }
   return {
     setToken(next) {
@@ -26570,7 +26581,12 @@ function createRegistryClient(options) {
             timeoutMs: 12e4
           });
           if (result.status !== 200) {
-            fail(result.status, result.text, result.headers, `Uploading part ${input.partNumber} failed`);
+            fail(
+              result.status,
+              result.text,
+              result.headers,
+              `Uploading part ${input.partNumber} failed`
+            );
           }
           return result;
         },
@@ -26806,9 +26822,7 @@ function planPartLengths(fileSize2, serverPartSize) {
       throw new ActionError(`A part would be ${length} bytes, above the 8 MiB maximum.`);
     }
     if (!isLast && length < MIN_PART_BYTES) {
-      throw new ActionError(
-        `A non-final part would be ${length} bytes, under the 5 MiB minimum.`
-      );
+      throw new ActionError(`A non-final part would be ${length} bytes, under the 5 MiB minimum.`);
     }
     lengths.push(length);
     remaining -= length;
@@ -27065,7 +27079,9 @@ function renderSummary(info2) {
     `| Registry | ${info2.registryUrl} |`
   ];
   if (info2.overRecommended) {
-    lines.push(`| Warning | Archive is above the 80 MiB publisher target. The hard cap is 256 MiB. |`);
+    lines.push(
+      `| Warning | Archive is above the 80 MiB publisher target. The hard cap is 256 MiB. |`
+    );
   }
   lines.push(
     "",

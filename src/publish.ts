@@ -1,21 +1,21 @@
-import { createHash } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
-import { isAbsolute, join, relative, resolve } from 'node:path'
+import { createHash } from "node:crypto"
+import { readFile } from "node:fs/promises"
+import { isAbsolute, join, relative, resolve } from "node:path"
 import {
   CLI_PATH,
   MANIFEST_FILENAME,
   MAX_MANIFEST_BYTES,
   RECOMMENDED_ARCHIVE_BYTES,
-} from './constants.ts'
-import { ActionError } from './errors.ts'
-import { formatBytes } from './bytes.ts'
-import type { Logger } from './log.ts'
-import { silentLogger } from './log.ts'
-import { parseManifest, type Manifest } from './manifest.ts'
-import { resolvePackage } from './package-ref.ts'
-import { normalizeRelPath } from './paths.ts'
-import { resolveVersion } from './semver.ts'
-import { selectFiles } from './select.ts'
+} from "./constants.ts"
+import { ActionError } from "./errors.ts"
+import { formatBytes } from "./bytes.ts"
+import type { Logger } from "./log.ts"
+import { silentLogger } from "./log.ts"
+import { parseManifest, type Manifest } from "./manifest.ts"
+import { resolvePackage } from "./package-ref.ts"
+import { normalizeRelPath } from "./paths.ts"
+import { resolveVersion } from "./semver.ts"
+import { selectFiles } from "./select.ts"
 import {
   assertGzip,
   fileSize,
@@ -25,18 +25,18 @@ import {
   pathExists,
   sha256File,
   tempArchivePath,
-} from './archive.ts'
+} from "./archive.ts"
 import {
   assertArchiveSize,
   assertNoRootManifest,
   assertReadyArchive,
   assertSafeEntries,
-} from './validate.ts'
-import { createRegistryClient, normalizeRegistryUrl, type RegistryClient } from './registry.ts'
-import { authorize } from './auth.ts'
-import { uploadArchive, type OnImmutable } from './upload.ts'
-import { deployUrl, renderSummary } from './summary.ts'
-import type { Sleep } from './retry.ts'
+} from "./validate.ts"
+import { createRegistryClient, normalizeRegistryUrl, type RegistryClient } from "./registry.ts"
+import { authorize } from "./auth.ts"
+import { uploadArchive, type OnImmutable } from "./upload.ts"
+import { deployUrl, renderSummary } from "./summary.ts"
+import type { Sleep } from "./retry.ts"
 
 export interface PublishOptions {
   packageInput?: string
@@ -97,7 +97,7 @@ export function filesForArchive(
 function omittedFromArchive(file: string, manifestRelative: string | undefined): boolean {
   if (file === MANIFEST_FILENAME) return true
   return (
-    manifestRelative !== undefined && !manifestRelative.includes('/') && file === manifestRelative
+    manifestRelative !== undefined && !manifestRelative.includes("/") && file === manifestRelative
   )
 }
 
@@ -118,14 +118,14 @@ export function resolveManifestFile(options: {
 export async function publish(options: PublishOptions): Promise<PublishResult> {
   const log = options.log ?? silentLogger
   const registryUrl = normalizeRegistryUrl(options.registryUrl)
-  if (registryUrl.startsWith('http://')) {
+  if (registryUrl.startsWith("http://")) {
     const host = new URL(registryUrl).hostname
-    if (host !== 'localhost' && host !== '127.0.0.1') {
+    if (host !== "localhost" && host !== "127.0.0.1") {
       log.warn(`registry-url uses http (${registryUrl}). Production is https://alchemy.new.`)
     }
   }
   if (options.archive && options.path) {
-    throw new ActionError('Pass either archive or path, not both.')
+    throw new ActionError("Pass either archive or path, not both.")
   }
 
   const prepared = options.archive
@@ -163,7 +163,7 @@ export async function publish(options: PublishOptions): Promise<PublishResult> {
   const url = deployUrl(pkg.org, pkg.project, version)
 
   log.info(
-    `${options.dryRun ? 'Dry run for' : 'Publishing'} ${pkg.org}/${pkg.project}@${version} to ${registryUrl} (${formatBytes(sizeBytes)}, sha256 ${sha256}, manifest sha256 ${loaded.sha256}).`,
+    `${options.dryRun ? "Dry run for" : "Publishing"} ${pkg.org}/${pkg.project}@${version} to ${registryUrl} (${formatBytes(sizeBytes)}, sha256 ${sha256}, manifest sha256 ${loaded.sha256}).`,
   )
   log.info(`${MANIFEST_FILENAME} is not in the archive. It is uploaded separately.`)
   for (const file of files.slice(0, 200)) log.info(`pack ${file}`)
@@ -193,7 +193,7 @@ export async function publish(options: PublishOptions): Promise<PublishResult> {
 
   if (options.dryRun) {
     await options.writeSummary?.(markdown)
-    log.info('Dry run: archive was not uploaded.')
+    log.info("Dry run: archive was not uploaded.")
     return {
       org: pkg.org,
       project: pkg.project,
@@ -209,9 +209,9 @@ export async function publish(options: PublishOptions): Promise<PublishResult> {
 
   if (options.token) {
     options.mask?.(options.token)
-    if (!options.token.startsWith('anr_')) {
+    if (!options.token.startsWith("anr_")) {
       throw new ActionError(
-        'The token input must be an alchemy.new API token starting with anr_. Short-lived anu_ grants are created by the OIDC exchange and cannot be pasted here.',
+        "The token input must be an alchemy.new API token starting with anr_. Short-lived anu_ grants are created by the OIDC exchange and cannot be pasted here.",
       )
     }
   }
@@ -316,11 +316,11 @@ async function prepareDirectory(options: PublishOptions, log: Logger): Promise<P
   })
   if (selection.rejected.length > 0) {
     const lines = selection.rejected.slice(0, 20).map((item) => `${item.path}: ${item.reason}`)
-    throw new ActionError(`Refusing to pack forbidden files:\n${lines.join('\n')}`)
+    throw new ActionError(`Refusing to pack forbidden files:\n${lines.join("\n")}`)
   }
   const files = filesForArchive(selection.files, manifestRelative)
   const selected = new Set(files)
-  await assertPresent(directory, loaded.manifest.entrypoint, selected, 'deployment entrypoint')
+  await assertPresent(directory, loaded.manifest.entrypoint, selected, "deployment entrypoint")
   await assertPresent(directory, CLI_PATH, selected, CLI_PATH)
   const archivePath = await tempArchivePath()
   await packFiles(directory, files, archivePath)
@@ -339,8 +339,8 @@ async function loadManifest(manifestPath: string): Promise<LoadedManifest> {
   try {
     bytes = await readFile(manifestPath)
   } catch (error) {
-    const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : ''
-    if (code === 'ENOENT') {
+    const code = error && typeof error === "object" && "code" in error ? String(error.code) : ""
+    if (code === "ENOENT") {
       throw new ActionError(
         `Missing manifest at ${manifestPath}. Pass manifest, or place ${MANIFEST_FILENAME} at the package root. The manifest is uploaded separately and is not read from the archive.`,
       )
@@ -354,14 +354,14 @@ async function loadManifest(manifestPath: string): Promise<LoadedManifest> {
   }
   return {
     bytes,
-    sha256: createHash('sha256').update(bytes).digest('hex'),
-    manifest: parseManifest(bytes.toString('utf8'), manifestPath),
+    sha256: createHash("sha256").update(bytes).digest("hex"),
+    manifest: parseManifest(bytes.toString("utf8"), manifestPath),
   }
 }
 
 function relativeInside(directory: string, filePath: string): string | undefined {
   const rel = relative(directory, filePath)
-  if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) return undefined
+  if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) return undefined
   const normalized = normalizeRelPath(rel)
   if (!normalized) return undefined
   return normalized

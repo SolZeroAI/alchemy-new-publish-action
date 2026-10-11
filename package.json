@@ -4,17 +4,17 @@
   "private": true,
   "description": "GitHub Action that publishes a ready archive to the alchemy.new package registry.",
   "type": "module",
-  "engines": {
-    "node": ">=24"
-  },
   "scripts": {
     "build": "esbuild src/index.ts --bundle --platform=node --target=node24 --format=cjs --outfile=dist/index.cjs --banner:js=\"/* alchemy-new-publish-action */\"",
-    "typecheck": "tsc --noEmit",
-    "lint": "eslint .",
-    "test": "node --import tsx --test tests/**/*.test.ts",
+    "check": "nub run typecheck && nub run lint && nub run format && nub run test && nub run build",
     "check-dist": "nub run build && git diff --exit-code -- dist",
+    "format": "oxfmt --check",
+    "format:fix": "oxfmt",
+    "lint": "NODE_OPTIONS='--import tsx' oxlint",
+    "lint:fix": "NODE_OPTIONS='--import tsx' oxlint --fix",
+    "test": "node --import tsx --test tests/**/*.test.ts",
     "tegami": "tsx scripts/tegami.mts",
-    "all": "nub run typecheck && nub run lint && nub run test && nub run build"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@actions/core": "^3.0.1",
@@ -23,20 +23,32 @@
     "tar": "^7.5.22"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.5",
+    "@oxlint/plugins": "1.87.0",
     "@types/node": "^24.10.1",
+    "anti-slop": "github:dmmulroy/anti-slop",
     "esbuild": "^0.25.11",
-    "eslint": "^10.12.0",
-    "tsx": "^4.20.6",
+    "oxfmt": "0.72.0",
+    "oxlint": "1.87.0",
     "tegami": "1.5.0",
-    "typescript": "^5.9.3",
-    "typescript-eslint": "^8.71.1"
+    "tsx": "^4.20.6",
+    "typescript": "7.0.2"
   },
   "devEngines": {
     "packageManager": {
       "name": "nub",
-      "version": "^0.9.6",
-      "onFail": "ignore"
+      "version": "0.9.6",
+      "onFail": "warn"
+    },
+    "runtime": {
+      "name": "node",
+      "version": "24.15.0"
     }
+  },
+  "engines": {
+    "node": ">=24.15.0 <25"
+  },
+  "packageManager": "nub@0.9.6",
+  "allowScripts": {
+    "esbuild": true
   }
 }

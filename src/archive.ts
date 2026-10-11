@@ -1,40 +1,40 @@
-import { createHash } from 'node:crypto'
-import { createReadStream, createWriteStream, type Stats } from 'node:fs'
-import { lstat, mkdir, mkdtemp, open, readFile, readlink, rm, stat } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
-import { Gzip } from 'minizlib'
-import { extract, list, WriteEntry, type ReadEntry } from 'tar'
-import { formatBytes } from './bytes.ts'
-import { MAX_ARCHIVE_BYTES, MANIFEST_FILENAME } from './constants.ts'
-import { ActionError } from './errors.ts'
-import { normalizeRelPath, resolvedSymlink, symlinkResolvesInside } from './paths.ts'
-import { hardRejectReason } from './rules.ts'
+import { createHash } from "node:crypto"
+import { createReadStream, createWriteStream, type Stats } from "node:fs"
+import { lstat, mkdir, mkdtemp, open, readFile, readlink, rm, stat } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { dirname, join } from "node:path"
+import { Gzip } from "minizlib"
+import { extract, list, WriteEntry, type ReadEntry } from "tar"
+import { formatBytes } from "./bytes.ts"
+import { MAX_ARCHIVE_BYTES, MANIFEST_FILENAME } from "./constants.ts"
+import { ActionError } from "./errors.ts"
+import { normalizeRelPath, resolvedSymlink, symlinkResolvesInside } from "./paths.ts"
+import { hardRejectReason } from "./rules.ts"
 
 export interface ArchiveEntry {
   path: string
-  type: 'file' | 'symlink' | 'directory' | 'other'
+  type: "file" | "symlink" | "directory" | "other"
   size: number
   linkTarget?: string
 }
 
-function entryType(type: ReadEntry['type']): ArchiveEntry['type'] {
-  if (type === 'File' || type === 'OldFile' || type === 'ContiguousFile' || type === 'Link') {
-    return 'file'
+function entryType(type: ReadEntry["type"]): ArchiveEntry["type"] {
+  if (type === "File" || type === "OldFile" || type === "ContiguousFile" || type === "Link") {
+    return "file"
   }
-  if (type === 'SymbolicLink') return 'symlink'
-  if (type === 'Directory') return 'directory'
-  return 'other'
+  if (type === "SymbolicLink") return "symlink"
+  if (type === "Directory") return "directory"
+  return "other"
 }
 
 export async function assertGzip(filePath: string): Promise<void> {
-  const handle = await open(filePath, 'r')
+  const handle = await open(filePath, "r")
   try {
     const buf = Buffer.alloc(2)
     const { bytesRead } = await handle.read(buf, 0, 2, 0)
     if (bytesRead < 2 || buf[0] !== 0x1f || buf[1] !== 0x8b) {
       throw new ActionError(
-        'Archive is not gzip. alchemy.new stores a .tar.gz archive with content type application/gzip.',
+        "Archive is not gzip. alchemy.new stores a .tar.gz archive with content type application/gzip.",
       )
     }
   } finally {
@@ -49,16 +49,16 @@ export async function fileSize(filePath: string): Promise<number> {
 }
 
 export async function sha256File(filePath: string): Promise<string> {
-  const hash = createHash('sha256')
+  const hash = createHash("sha256")
   await new Promise<void>((resolve, reject) => {
     const stream = createReadStream(filePath)
-    stream.on('data', (chunk: Buffer | string) => {
+    stream.on("data", (chunk: Buffer | string) => {
       hash.update(chunk)
     })
-    stream.on('error', reject)
-    stream.on('end', () => resolve())
+    stream.on("error", reject)
+    stream.on("end", () => resolve())
   })
-  return hash.digest('hex')
+  return hash.digest("hex")
 }
 
 export async function listArchive(archivePath: string): Promise<ArchiveEntry[]> {
@@ -80,7 +80,7 @@ export async function listArchive(archivePath: string): Promise<ArchiveEntry[]> 
 }
 
 export async function readArchiveText(archivePath: string, member: string): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), 'alchemy-new-manifest-'))
+  const dir = await mkdtemp(join(tmpdir(), "alchemy-new-manifest-"))
   try {
     await extract({
       file: archivePath,
@@ -88,15 +88,15 @@ export async function readArchiveText(archivePath: string, member: string): Prom
       strict: true,
       filter: (path) => normalizeRelPath(path) === member,
     })
-    const text = await readFile(join(dir, member), 'utf8')
+    const text = await readFile(join(dir, member), "utf8")
     if (text.length > 1_000_000) {
       throw new ActionError(`${member} is larger than 1 MiB.`)
     }
     return text
   } catch (error) {
     if (error instanceof ActionError) throw error
-    const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : ''
-    if (code === 'ENOENT') {
+    const code = typeof error === "object" && error && "code" in error ? String(error.code) : ""
+    if (code === "ENOENT") {
       throw new ActionError(`Archive is missing ${member} at the archive root.`)
     }
     const message = error instanceof Error ? error.message : String(error)
@@ -132,7 +132,7 @@ export async function packFiles(
   options: PackOptions = {},
 ): Promise<void> {
   if (files.length === 0) {
-    throw new ActionError('Nothing to pack. The include and exclude rules removed every file.')
+    throw new ActionError("Nothing to pack. The include and exclude rules removed every file.")
   }
   const maxBytes = options.maxBytes ?? MAX_ARCHIVE_BYTES
   await mkdir(dirname(destination), { recursive: true })
@@ -156,7 +156,7 @@ export async function packFiles(
     return failed
   }
 
-  gzip.on('data', (chunk: Buffer) => {
+  gzip.on("data", (chunk: Buffer) => {
     if (failed) return
     written += chunk.length
     if (written > maxBytes) {
@@ -169,19 +169,19 @@ export async function packFiles(
     }
     if (!output.write(chunk)) gzip.pause()
   })
-  output.on('drain', () => {
+  output.on("drain", () => {
     if (!failed) gzip.resume()
   })
-  gzip.on('end', () => {
+  gzip.on("end", () => {
     output.end()
   })
-  gzip.on('error', (error: unknown) => fail(error))
-  output.on('error', (error: unknown) => fail(error))
+  gzip.on("error", (error: unknown) => fail(error))
+  output.on("error", (error: unknown) => fail(error))
 
   // Resolve on close. Errors are stored on `failed` so this promise cannot reject
   // before the pack loop awaits it.
   const closed = new Promise<void>((resolve) => {
-    output.once('close', () => resolve())
+    output.once("close", () => resolve())
   })
 
   try {
@@ -208,8 +208,8 @@ async function assertSymlinkAllowed(root: string, relativePath: string): Promise
   try {
     info = await lstat(absolute)
   } catch (error) {
-    const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : ''
-    if (code === 'ENOENT') {
+    const code = typeof error === "object" && error && "code" in error ? String(error.code) : ""
+    if (code === "ENOENT") {
       throw new ActionError(`Cannot pack ${relativePath}: the file is missing.`)
     }
     throw error
@@ -254,7 +254,7 @@ function writePackedEntry(
     const settle = (error?: Error) => {
       if (settled) return
       settled = true
-      gzip.off('error', onGzipError)
+      gzip.off("error", onGzipError)
       if (error) reject(error)
       else resolve()
     }
@@ -262,12 +262,12 @@ function writePackedEntry(
       const failure = getFailure()
       settle(failure ?? new ActionError(`Stopped packing at ${relativePath}.`))
     }
-    gzip.on('error', onGzipError)
-    entry.on('error', (error: unknown) => {
+    gzip.on("error", onGzipError)
+    entry.on("error", (error: unknown) => {
       settle(error instanceof Error ? error : new Error(String(error)))
     })
-    entry.on('end', () => settle())
-    entry.on('data', (chunk: Buffer) => {
+    entry.on("end", () => settle())
+    entry.on("data", (chunk: Buffer) => {
       if (settled) return
       const failure = getFailure()
       if (failure) {
@@ -288,7 +288,7 @@ function writePackedEntry(
       }
       if (!accepted) {
         entry.pause()
-        gzip.once('drain', () => {
+        gzip.once("drain", () => {
           if (settled) return
           const later = getFailure()
           if (later) settle(later)
@@ -301,14 +301,14 @@ function writePackedEntry(
 
 export async function tempArchivePath(): Promise<string> {
   const base = process.env.RUNNER_TEMP || tmpdir()
-  const dir = await mkdtemp(join(base, 'alchemy-new-'))
-  return join(dir, 'alchemy.new.tar.gz')
+  const dir = await mkdtemp(join(base, "alchemy-new-"))
+  return join(dir, "alchemy.new.tar.gz")
 }
 
 export function memberMap(entries: readonly ArchiveEntry[]): Map<string, ArchiveEntry> {
   const files = new Map<string, ArchiveEntry>()
   for (const entry of entries) {
-    if (entry.type === 'file' || entry.type === 'symlink') files.set(entry.path, entry)
+    if (entry.type === "file" || entry.type === "symlink") files.set(entry.path, entry)
   }
   return files
 }

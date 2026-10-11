@@ -1,3 +1,3 @@
-import { run } from './main.ts'
+import { run } from "./main.ts"
 
 void run()

@@ -1,7 +1,7 @@
-import { OIDC_AUDIENCE } from './constants.ts'
-import { ActionError } from './errors.ts'
-import type { Logger } from './log.ts'
-import type { RegistryClient } from './registry.ts'
+import { OIDC_AUDIENCE } from "./constants.ts"
+import { ActionError } from "./errors.ts"
+import type { Logger } from "./log.ts"
+import type { RegistryClient } from "./registry.ts"
 
 export async function authorize(options: {
   token?: string
@@ -14,18 +14,18 @@ export async function authorize(options: {
 }): Promise<string> {
   if (options.token) {
     options.mask(options.token)
-    if (!options.token.startsWith('anr_')) {
+    if (!options.token.startsWith("anr_")) {
       throw new ActionError(
-        'The token input must be an alchemy.new API token starting with anr_. Short-lived anu_ grants are created by the OIDC exchange and cannot be pasted here.',
+        "The token input must be an alchemy.new API token starting with anr_. Short-lived anu_ grants are created by the OIDC exchange and cannot be pasted here.",
       )
     }
-    options.log.info('Using the anr_ API token. OIDC exchange was skipped.')
+    options.log.info("Using the anr_ API token. OIDC exchange was skipped.")
     return options.token
   }
 
   if (!options.getIdToken) {
     throw new ActionError(
-      'No API token was provided and OIDC is unavailable. Set permissions: id-token: write, or pass an anr_ token.',
+      "No API token was provided and OIDC is unavailable. Set permissions: id-token: write, or pass an anr_ token.",
     )
   }
 
@@ -45,8 +45,8 @@ export async function authorize(options: {
     project: options.project,
   })
   options.mask(grant.token)
-  if (!grant.token.startsWith('anu_')) {
-    throw new ActionError('OIDC exchange returned a credential that is not an anu_ upload grant.')
+  if (!grant.token.startsWith("anu_")) {
+    throw new ActionError("OIDC exchange returned a credential that is not an anu_ upload grant.")
   }
   options.log.info(
     `OIDC exchange issued a package-scoped upload grant for ${options.org}/${options.project} expiring at ${grant.expiresAt}.`,

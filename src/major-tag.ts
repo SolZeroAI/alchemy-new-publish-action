@@ -1,5 +1,5 @@
 /** Package name Tegami uses in `name@version` git tags. */
-export const PACKAGE_TAG_NAME = 'alchemy-new-publish-action'
+export const PACKAGE_TAG_NAME = "alchemy-new-publish-action"
 
 const RELEASE =
   /^(?:(?<name>[A-Za-z0-9._-]+)@|v)(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)\.(?<patch>0|[1-9]\d*)(?:-(?<pre>[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/
@@ -12,7 +12,7 @@ const RELEASE =
 export function floatingTagForRelease(
   tags: readonly string[],
   packageName = PACKAGE_TAG_NAME,
-): 'v1' | undefined {
+): "v1" | undefined {
   const stableMajors: number[] = []
   for (const tag of tags) {
     const match = RELEASE.exec(tag)
@@ -22,6 +22,6 @@ export function floatingTagForRelease(
     stableMajors.push(Number(match.groups.major))
   }
   if (stableMajors.length === 0) return undefined
-  if (stableMajors.every((major) => major === 1)) return 'v1'
+  if (stableMajors.every((major) => major === 1)) return "v1"
   return undefined
 }

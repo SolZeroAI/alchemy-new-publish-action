@@ -1,14 +1,14 @@
-import { CLI_PATH, MANIFEST_FILENAME, MAX_ARCHIVE_BYTES } from './constants.ts'
-import { ActionError } from './errors.ts'
-import type { Manifest } from './manifest.ts'
-import { memberMap, type ArchiveEntry } from './archive.ts'
-import { hardRejectReason } from './rules.ts'
-import { normalizeRelPath, resolvedSymlink, symlinkResolvesInside } from './paths.ts'
-import { formatBytes } from './bytes.ts'
+import { CLI_PATH, MANIFEST_FILENAME, MAX_ARCHIVE_BYTES } from "./constants.ts"
+import { ActionError } from "./errors.ts"
+import type { Manifest } from "./manifest.ts"
+import { memberMap, type ArchiveEntry } from "./archive.ts"
+import { hardRejectReason } from "./rules.ts"
+import { normalizeRelPath, resolvedSymlink, symlinkResolvesInside } from "./paths.ts"
+import { formatBytes } from "./bytes.ts"
 
 export function assertArchiveSize(sizeBytes: number, cap = MAX_ARCHIVE_BYTES): void {
   if (sizeBytes <= 0) {
-    throw new ActionError('Archive is empty.')
+    throw new ActionError("Archive is empty.")
   }
   if (sizeBytes > cap) {
     throw new ActionError(
@@ -26,10 +26,10 @@ export function assertSafeEntries(entries: readonly ArchiveEntry[]): void {
       problems.push(`${entry.path}: path is absolute or escapes the archive root`)
       continue
     }
-    if (normalized === '') continue
+    if (normalized === "") continue
     const reason = hardRejectReason(normalized)
     if (reason) problems.push(reason)
-    if (entry.type === 'symlink' && entry.linkTarget) {
+    if (entry.type === "symlink" && entry.linkTarget) {
       if (!symlinkResolvesInside(normalized, entry.linkTarget)) {
         problems.push(`symlink ${normalized} points outside the archive (${entry.linkTarget})`)
       } else {
@@ -44,9 +44,7 @@ export function assertSafeEntries(entries: readonly ArchiveEntry[]): void {
     }
   }
   if (problems.length > 0) {
-    throw new ActionError(
-      `Archive failed safety checks:\n${problems.slice(0, 20).join('\n')}`,
-    )
+    throw new ActionError(`Archive failed safety checks:\n${problems.slice(0, 20).join("\n")}`)
   }
 }
 

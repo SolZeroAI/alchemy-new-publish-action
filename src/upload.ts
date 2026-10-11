@@ -1,15 +1,11 @@
-import { open } from 'node:fs/promises'
-import {
-  MAX_ARCHIVE_BYTES,
-  MAX_PART_BYTES,
-  MIN_PART_BYTES,
-} from './constants.ts'
-import { ActionError, RegistryError } from './errors.ts'
-import { formatBytes } from './bytes.ts'
-import type { Logger } from './log.ts'
-import type { RegistryClient, VersionRecord } from './registry.ts'
+import { open } from "node:fs/promises"
+import { MAX_ARCHIVE_BYTES, MAX_PART_BYTES, MIN_PART_BYTES } from "./constants.ts"
+import { ActionError, RegistryError } from "./errors.ts"
+import { formatBytes } from "./bytes.ts"
+import type { Logger } from "./log.ts"
+import type { RegistryClient, VersionRecord } from "./registry.ts"
 
-export type OnImmutable = 'fail' | 'skip-if-digest-matches'
+export type OnImmutable = "fail" | "skip-if-digest-matches"
 
 export function resolvePartSize(fileSize: number, serverPartSize: number): number {
   if (!Number.isInteger(serverPartSize) || serverPartSize <= 0) {
@@ -26,7 +22,7 @@ export function resolvePartSize(fileSize: number, serverPartSize: number): numbe
 
 /** Byte length of each part. The last part may be smaller than 5 MiB. */
 export function planPartLengths(fileSize: number, serverPartSize: number): number[] {
-  if (fileSize <= 0) throw new ActionError('Archive is empty.')
+  if (fileSize <= 0) throw new ActionError("Archive is empty.")
   const partSize = resolvePartSize(fileSize, serverPartSize)
   const lengths: number[] = []
   let remaining = fileSize
@@ -37,9 +33,7 @@ export function planPartLengths(fileSize: number, serverPartSize: number): numbe
       throw new ActionError(`A part would be ${length} bytes, above the 8 MiB maximum.`)
     }
     if (!isLast && length < MIN_PART_BYTES) {
-      throw new ActionError(
-        `A non-final part would be ${length} bytes, under the 5 MiB minimum.`,
-      )
+      throw new ActionError(`A non-final part would be ${length} bytes, under the 5 MiB minimum.`)
     }
     lengths.push(length)
     remaining -= length
@@ -63,8 +57,8 @@ export function decideImmutable(
   onImmutable: OnImmutable,
 ): { record: VersionRecord; skipped: boolean } {
   const yanked = existing.yanked
-    ? ' The existing version is yanked. Yanked versions stay immutable and cannot deploy.'
-    : ''
+    ? " The existing version is yanked. Yanked versions stay immutable and cannot deploy."
+    : ""
   const recordedArchive = digest(existing.sha256)
   if (!recordedArchive) {
     throw new ActionError(
@@ -89,8 +83,8 @@ export function decideImmutable(
   }
   const sameManifest = recordedManifest
     ? ` and manifest sha256 (${manifestSha256})`
-    : '. The version record does not include manifestSha256, so that digest was not compared'
-  if (onImmutable === 'skip-if-digest-matches') {
+    : ". The version record does not include manifestSha256, so that digest was not compared"
+  if (onImmutable === "skip-if-digest-matches") {
     return {
       record: {
         ...existing,
@@ -120,10 +114,10 @@ export async function uploadArchive(options: {
   log: Logger
 }): Promise<{ record: VersionRecord; skipped: boolean }> {
   if (!/^[0-9a-f]{64}$/.test(options.sha256)) {
-    throw new ActionError('Internal error: sha256 is not 64 lowercase hex characters.')
+    throw new ActionError("Internal error: sha256 is not 64 lowercase hex characters.")
   }
   if (!/^[0-9a-f]{64}$/.test(options.manifestSha256)) {
-    throw new ActionError('Internal error: manifestSha256 is not 64 lowercase hex characters.')
+    throw new ActionError("Internal error: manifestSha256 is not 64 lowercase hex characters.")
   }
 
   let authed = false
@@ -138,7 +132,7 @@ export async function uploadArchive(options: {
     existing = await options.client.getVersion(options.org, options.project, options.version)
   } catch (error) {
     if (error instanceof RegistryError && (error.status === 401 || error.status === 403)) {
-      options.log.info('Version lookup required credentials. Authenticating and retrying it.')
+      options.log.info("Version lookup required credentials. Authenticating and retrying it.")
       await ensureAuth()
       existing = await options.client.getVersion(options.org, options.project, options.version)
     } else {
@@ -166,7 +160,7 @@ export async function uploadArchive(options: {
   }
 
   await ensureAuth()
-  let session: Awaited<ReturnType<RegistryClient['startUpload']>>
+  let session: Awaited<ReturnType<RegistryClient["startUpload"]>>
   try {
     session = await options.client.startUpload(options.org, options.project, options.version)
   } catch (error) {
@@ -180,13 +174,13 @@ export async function uploadArchive(options: {
       `Archive is ${formatBytes(options.sizeBytes)} (${options.sizeBytes} bytes), above the upload cap of ${formatBytes(cap)}.`,
     )
   }
-  if (session.contentType && session.contentType !== 'application/gzip') {
+  if (session.contentType && session.contentType !== "application/gzip") {
     options.log.warn(
       `Registry content type is ${session.contentType}. The contract stores application/gzip.`,
     )
   }
   options.log.info(
-    `Upload ${session.uploadId} started. Part size ${session.partSize} bytes. Expires ${session.expiresAt ?? 'unspecified'}.`,
+    `Upload ${session.uploadId} started. Part size ${session.partSize} bytes. Expires ${session.expiresAt ?? "unspecified"}.`,
   )
 
   try {
@@ -204,13 +198,13 @@ export async function uploadArchive(options: {
     })
     if (record.sha256.toLowerCase() !== options.sha256) {
       throw new ActionError(
-        `Registry recorded sha256 ${record.sha256 || '(missing)'}, which does not match ${options.sha256}.`,
+        `Registry recorded sha256 ${record.sha256 || "(missing)"}, which does not match ${options.sha256}.`,
       )
     }
     const recordedManifest = digest(record.manifestSha256)
     if (recordedManifest !== options.manifestSha256) {
       throw new ActionError(
-        `Registry recorded manifest sha256 ${record.manifestSha256 || '(missing)'}, which does not match ${options.manifestSha256}.`,
+        `Registry recorded manifest sha256 ${record.manifestSha256 || "(missing)"}, which does not match ${options.manifestSha256}.`,
       )
     }
     return {
@@ -218,7 +212,7 @@ export async function uploadArchive(options: {
       skipped: false,
     }
   } catch (error) {
-    if (error instanceof RegistryError && error.code === 'immutable_version') {
+    if (error instanceof RegistryError && error.code === "immutable_version") {
       await safeAbort(options, session.uploadId)
       return rethrowOrSkip(error, options, ensureAuth)
     }
@@ -241,7 +235,7 @@ async function rethrowOrSkip(
   },
   ensureAuth: () => Promise<void>,
 ): Promise<{ record: VersionRecord; skipped: boolean }> {
-  if (!(error instanceof RegistryError) || error.code !== 'immutable_version') {
+  if (!(error instanceof RegistryError) || error.code !== "immutable_version") {
     throw error
   }
   await ensureAuth()
@@ -271,7 +265,7 @@ async function sendManifest(
   })
   if (digest(result.sha256) !== options.manifestSha256) {
     throw new ActionError(
-      `Registry recorded manifest sha256 ${result.sha256 || '(missing)'}, which does not match ${options.manifestSha256}.`,
+      `Registry recorded manifest sha256 ${result.sha256 || "(missing)"}, which does not match ${options.manifestSha256}.`,
     )
   }
   options.log.info(
@@ -291,7 +285,7 @@ async function sendParts(
   uploadId: string,
   lengths: readonly number[],
 ): Promise<Array<{ partNumber: number; etag: string }>> {
-  const handle = await open(options.archivePath, 'r')
+  const handle = await open(options.archivePath, "r")
   try {
     const parts: Array<{ partNumber: number; etag: string }> = []
     let offset = 0

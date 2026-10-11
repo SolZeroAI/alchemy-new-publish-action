@@ -2,7 +2,7 @@
 export class ActionError extends Error {
   constructor(message: string) {
     super(message)
-    this.name = 'ActionError'
+    this.name = "ActionError"
   }
 }
 
@@ -11,14 +11,9 @@ export class RegistryError extends ActionError {
   readonly code: string | undefined
   readonly retryAfterMs: number | undefined
 
-  constructor(
-    message: string,
-    status: number,
-    code?: string,
-    retryAfterMs?: number,
-  ) {
+  constructor(message: string, status: number, code?: string, retryAfterMs?: number) {
     super(message)
-    this.name = 'RegistryError'
+    this.name = "RegistryError"
     this.status = status
     this.code = code
     this.retryAfterMs = retryAfterMs
