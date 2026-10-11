@@ -20,7 +20,9 @@ Commit `dist/index.cjs` with the source change. CI rejects a pull request whose 
 
 Publishing is a multipart upload with sha256 checks, retries, JSONC parsing, and archive inspection. Those belong in a tested program. A composite action would shell out to `curl` and `tar`, which is harder to test and easier to leak a token when the shell traces commands. Node 24 is the current GitHub Actions JavaScript runtime. Node 20 was removed from hosted runners on 2026-09-23.
 
-Dependencies are `@actions/core` (inputs, outputs, masking, OIDC, job summary), `tar` (the archive), and `ignore` (gitignore include/exclude patterns). The registry client uses `fetch`.
+Dependencies are `@actions/core` (inputs, outputs, masking, OIDC, job summary), `tar` (archive entries and listing), `minizlib` (gzip for the pack stream), and `ignore` (gitignore include/exclude patterns). The registry client uses `fetch`.
+
+Packing does not use `tar.create`. That scheduler deadlocks on hardlinked trees and does not pause gzip when the file writer is full. `src/archive.ts` writes one entry at a time into a gzip stream that honors backpressure, then stores the `.tar.gz` in a temp file. `node --import tsx scripts/pack-large.mjs` packs a synthetic tree over 256 MiB uncompressed and checks that the gzip, sha256, and symlink entries come back. CI runs it as its own job.
 
 ## Releases
 

@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import { randomFillSync } from 'node:crypto'
+import { linkSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -71,6 +73,126 @@ describe('packing', () => {
       assert.equal(selection.rejected.length, 0)
     } finally {
       await pkg.cleanup()
+    }
+  })
+
+  it('stores symlinks as symlinks and keeps hardlink targets', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'alchemy-links-'))
+    const out = await mkdtemp(join(tmpdir(), 'alchemy-links-out-'))
+    try {
+      mkdirSync(join(root, 'store', 'pkg'), { recursive: true })
+      mkdirSync(join(root, 'node_modules'))
+      mkdirSync(join(root, 'dup'))
+      writeFileSync(join(root, 'store', 'pkg', 'index.js'), 'export {}\n')
+      symlinkSync('../store/pkg', join(root, 'node_modules', 'pkg'))
+      writeFileSync(join(root, 'dup', 'a.txt'), 'same-bytes')
+      linkSync(join(root, 'dup', 'a.txt'), join(root, 'dup', 'b.txt'))
+      const archive = join(out, 'links.tar.gz')
+      await packFiles(
+        root,
+        ['store/pkg/index.js', 'node_modules/pkg', 'dup/a.txt', 'dup/b.txt'],
+        archive,
+      )
+      const entries = await listArchive(archive)
+      const link = entries.find((entry) => entry.path === 'node_modules/pkg')
+      assert.equal(link?.type, 'symlink')
+      assert.equal(link?.linkTarget, '../store/pkg')
+      const names = entries.map((entry) => entry.path)
+      assert.equal(names.includes('node_modules/pkg/index.js'), false)
+      assert.equal(names.includes('store/pkg/index.js'), true)
+      assert.equal(names.includes('dup/a.txt'), true)
+      assert.equal(names.includes('dup/b.txt'), true)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+      await rm(out, { recursive: true, force: true })
+    }
+  })
+
+  it('packs hundreds of hardlinks without stalling', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'alchemy-hard-'))
+    const out = await mkdtemp(join(tmpdir(), 'alchemy-hard-out-'))
+    try {
+      mkdirSync(join(root, 'a'))
+      mkdirSync(join(root, 'b'))
+      mkdirSync(join(root, 'links'))
+      const files: string[] = []
+      for (let i = 0; i < 300; i += 1) {
+        const name = String(i).padStart(4, '0')
+        writeFileSync(join(root, 'a', `${name}.bin`), Buffer.alloc(4096, i % 251))
+        linkSync(join(root, 'a', `${name}.bin`), join(root, 'b', `${name}.bin`))
+        symlinkSync(`../a/${name}.bin`, join(root, 'links', name))
+        files.push(`a/${name}.bin`, `b/${name}.bin`, `links/${name}`)
+      }
+      let timer: NodeJS.Timeout | undefined
+      const result = await Promise.race([
+        packFiles(root, files, join(out, 'hard.tar.gz')).then(
+          () => 'completed',
+          (error: unknown) => error,
+        ),
+        new Promise((resolve) => {
+          timer = setTimeout(() => resolve('timeout'), 20_000)
+        }),
+      ])
+      if (timer) clearTimeout(timer)
+      assert.equal(result, 'completed')
+      const entries = await listArchive(join(out, 'hard.tar.gz'))
+      const link = entries.find((entry) => entry.path === 'links/0000')
+      assert.equal(link?.type, 'symlink')
+      assert.equal(link?.linkTarget, '../a/0000.bin')
+      assert.equal(
+        entries.some((entry) => entry.path === 'b/0000.bin'),
+        true,
+      )
+    } finally {
+      await rm(root, { recursive: true, force: true })
+      await rm(out, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects a symlink that points outside the package root', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'alchemy-escape-'))
+    const out = await mkdtemp(join(tmpdir(), 'alchemy-escape-out-'))
+    try {
+      writeFileSync(join(root, 'keep.txt'), 'keep')
+      symlinkSync('../outside', join(root, 'escape'))
+      symlinkSync('/etc/passwd', join(root, 'absolute'))
+      await assert.rejects(
+        () => packFiles(root, ['keep.txt', 'escape'], join(out, 'a.tar.gz')),
+        /points outside the package root/,
+      )
+      await assert.rejects(
+        () => packFiles(root, ['absolute'], join(out, 'b.tar.gz')),
+        /points outside the package root/,
+      )
+    } finally {
+      await rm(root, { recursive: true, force: true })
+      await rm(out, { recursive: true, force: true })
+    }
+  })
+
+  it('stops when the compressed archive exceeds the size cap', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'alchemy-cap-'))
+    const out = await mkdtemp(join(tmpdir(), 'alchemy-cap-out-'))
+    try {
+      const blob = Buffer.alloc(512 * 1024)
+      randomFillSync(blob)
+      writeFileSync(join(root, 'blob.bin'), blob)
+      let timer: NodeJS.Timeout | undefined
+      const result = await Promise.race([
+        packFiles(root, ['blob.bin'], join(out, 'big.tar.gz'), { maxBytes: 64 * 1024 }).then(
+          () => 'completed',
+          (error: unknown) => error,
+        ),
+        new Promise((resolve) => {
+          timer = setTimeout(() => resolve('timeout'), 10_000)
+        }),
+      ])
+      if (timer) clearTimeout(timer)
+      assert.ok(result instanceof Error, `expected a cap error, got ${String(result)}`)
+      assert.match(result.message, /size cap/)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+      await rm(out, { recursive: true, force: true })
     }
   })
 
