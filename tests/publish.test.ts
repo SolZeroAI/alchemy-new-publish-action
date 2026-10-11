@@ -55,14 +55,19 @@ describe('publish', () => {
       assert.equal(result.org, 'example-org')
       assert.equal(result.project, 'example-stack')
       assert.match(result.sha256, /^[0-9a-f]{64}$/)
+      assert.match(result.manifestSha256, /^[0-9a-f]{64}$/)
+      assert.notEqual(result.manifestSha256, result.sha256)
       assert.ok(result.sizeBytes > 0)
       assert.equal(
         result.url,
         'https://alchemy.new/?package=example-org/example-stack&version=1.2.3',
       )
       const summary = summaries[0] ?? ''
+      const packed = summary.split('### Packed files')[1]?.split('### Excluded')[0] ?? ''
       assert.match(summary, /Dry run/)
-      assert.match(summary, /alchemy\.new\.jsonc/)
+      assert.match(summary, /Manifest sha256/)
+      assert.match(summary, /not in the archive/)
+      assert.equal(packed.includes('alchemy.new.jsonc'), false)
       assert.match(summary, /node_modules\/alchemy\/bin\/cli\.js/)
       assert.match(summary, /node_modules\/alchemy\/cert\.pem/)
       assert.match(summary, /### Excluded/)
@@ -143,6 +148,7 @@ describe('publish', () => {
         version: '1.2.3',
         sha256: dry.sha256,
         sizeBytes: dry.sizeBytes,
+        manifestSha256: dry.manifestSha256,
         yanked: false,
       }
       const client: RegistryClient = {
@@ -159,6 +165,9 @@ describe('publish', () => {
         },
         async uploadPart() {
           throw new Error('part')
+        },
+        async uploadManifest() {
+          throw new Error('manifest')
         },
         async completeUpload() {
           throw new Error('complete')
@@ -180,6 +189,7 @@ describe('publish', () => {
       })
       assert.equal(result.skipped, true)
       assert.equal(result.sha256, dry.sha256)
+      assert.equal(result.manifestSha256, dry.manifestSha256)
       assert.equal(started, false)
     } finally {
       await pkg.cleanup()
@@ -210,6 +220,9 @@ describe('publish', () => {
         async uploadPart() {
           throw new Error('part')
         },
+        async uploadManifest() {
+          throw new Error('manifest')
+        },
         async completeUpload() {
           throw new Error('complete')
         },
@@ -231,6 +244,132 @@ describe('publish', () => {
             mask: () => {},
           }),
         /does not match this archive/,
+      )
+    } finally {
+      await pkg.cleanup()
+    }
+  })
+
+  it('skips when the version record has no manifest digest', async () => {
+    const pkg = await makePackage()
+    try {
+      const dry = await publish({
+        path: pkg.root,
+        version: '1.2.3',
+        include: [],
+        exclude: [],
+        defaultExcludes: true,
+        registryUrl: 'https://alchemy.new',
+        dryRun: true,
+        onImmutable: 'fail',
+      })
+      const client: RegistryClient = {
+        setToken() {},
+        async exchangeOidc() {
+          throw new Error('exchange')
+        },
+        async getVersion() {
+          return {
+            org: 'example-org',
+            project: 'example-stack',
+            version: '1.2.3',
+            sha256: dry.sha256,
+            sizeBytes: dry.sizeBytes,
+            yanked: false,
+          }
+        },
+        async startUpload() {
+          throw new Error('should not start')
+        },
+        async uploadPart() {
+          throw new Error('part')
+        },
+        async uploadManifest() {
+          throw new Error('manifest')
+        },
+        async completeUpload() {
+          throw new Error('complete')
+        },
+        async abortUpload() {},
+      }
+      const result = await publish({
+        path: pkg.root,
+        version: '1.2.3',
+        include: [],
+        exclude: [],
+        defaultExcludes: true,
+        registryUrl: 'https://alchemy.new',
+        dryRun: false,
+        onImmutable: 'skip-if-digest-matches',
+        client,
+        token: 'anr_test',
+        mask: () => {},
+      })
+      assert.equal(result.skipped, true)
+    } finally {
+      await pkg.cleanup()
+    }
+  })
+
+  it('does not skip when the manifest digest differs', async () => {
+    const pkg = await makePackage()
+    try {
+      const client: RegistryClient = {
+        setToken() {},
+        async exchangeOidc() {
+          throw new Error('exchange')
+        },
+        async getVersion() {
+          const dry = await publish({
+            path: pkg.root,
+            version: '1.2.3',
+            include: [],
+            exclude: [],
+            defaultExcludes: true,
+            registryUrl: 'https://alchemy.new',
+            dryRun: true,
+            onImmutable: 'fail',
+          })
+          return {
+            org: 'example-org',
+            project: 'example-stack',
+            version: '1.2.3',
+            sha256: dry.sha256,
+            manifestSha256: 'b'.repeat(64),
+            sizeBytes: dry.sizeBytes,
+            yanked: false,
+          }
+        },
+        async startUpload() {
+          throw new Error('should not start')
+        },
+        async uploadPart() {
+          throw new Error('part')
+        },
+        async uploadManifest() {
+          throw new Error('manifest')
+        },
+        async completeUpload() {
+          throw new Error('complete')
+        },
+        async abortUpload() {},
+      }
+      await assert.rejects(
+        () =>
+          publish({
+            path: pkg.root,
+            version: '1.2.3',
+            include: [],
+            exclude: [],
+            defaultExcludes: true,
+            registryUrl: 'https://alchemy.new',
+            dryRun: false,
+            onImmutable: 'skip-if-digest-matches',
+            client,
+            token: 'anr_test',
+            mask: () => {},
+          }),
+        /manifest sha256/,
       )
     } finally {
       await pkg.cleanup()

@@ -9,6 +9,7 @@ export interface ActionInputs {
   version?: string
   archive?: string
   path?: string
+  manifest?: string
   include: string[]
   exclude: string[]
   defaultExcludes: boolean
@@ -44,6 +45,7 @@ export function parseActionInputs(raw: {
   version?: string
   archive?: string
   path?: string
+  manifest?: string
   include?: string | readonly string[]
   exclude?: string | readonly string[]
   defaultExcludes?: string
@@ -65,6 +67,7 @@ export function parseActionInputs(raw: {
     ...(blank(raw.version) ? { version: blank(raw.version) } : {}),
     ...(blank(raw.archive) ? { archive: blank(raw.archive) } : {}),
     ...(blank(raw.path) ? { path: blank(raw.path) } : {}),
+    ...(blank(raw.manifest) ? { manifest: blank(raw.manifest) } : {}),
     include: parseList(raw.include),
     exclude: parseList(raw.exclude),
     defaultExcludes: parseBoolean('default-excludes', raw.defaultExcludes, true),

@@ -7,10 +7,6 @@ updates:
     groups:
       actions:
         patterns: ["*"]
-  - package-ecosystem: npm
-    directory: /
-    schedule:
-      interval: weekly
-    groups:
-      npm:
-        patterns: ["*"]
+# nub.lock is the lockfile nub writes (pnpm v9 bytes). Dependabot has no nub
+# ecosystem, and the npm ecosystem only reads package-lock.json, so dependency
+# updates for this repo are not opened automatically.

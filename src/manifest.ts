@@ -3,11 +3,12 @@ import { parseJsonc } from './jsonc.ts'
 import { canonicalVersion } from './semver.ts'
 import { isRecord, requiredString } from './record.ts'
 import { normalizeRelPath } from './paths.ts'
+import { MAX_MANIFEST_BYTES } from './constants.ts'
 
 const PROVIDERS = new Set(['cloudflare', 'aws', 'other'])
 
 export interface Manifest {
-  schemaVersion: 2
+  schemaVersion: 1
   id: string
   name: string
   description: string
@@ -34,8 +35,16 @@ const KNOWN_KEYS = new Set([
   'website',
 ])
 
-/** Parse and check the fields the registry and runner require. Schema version 2 only. */
+/**
+ * Parse and check the fields the registry and runner require.
+ * Schema version is 1. `source.kind` must be `registry`.
+ */
 export function parseManifest(text: string, filename = 'alchemy.new.jsonc'): Manifest {
+  if (Buffer.byteLength(text) > MAX_MANIFEST_BYTES) {
+    throw new ActionError(
+      `${filename} is ${Buffer.byteLength(text)} bytes, above the 256 KB manifest limit (${MAX_MANIFEST_BYTES}). The registry returns manifest_too_large.`,
+    )
+  }
   let value: unknown
   try {
     value = parseJsonc(text)
@@ -46,18 +55,15 @@ export function parseManifest(text: string, filename = 'alchemy.new.jsonc'): Man
   if (!isRecord(value)) {
     throw new ActionError(`${filename} must be a JSON object.`)
   }
-  if (text.length > 1_000_000) {
-    throw new ActionError(`${filename} is larger than 1 MiB.`)
-  }
 
   const unknown = Object.keys(value).filter((key) => !KNOWN_KEYS.has(key))
   if (unknown.length > 0) {
     throw new ActionError(
-      `${filename} has unknown fields: ${unknown.join(', ')}. Schema v2 does not allow additional properties, and a published version cannot be replaced.`,
+      `${filename} has unknown fields: ${unknown.join(', ')}. Schema v1 does not allow additional properties, and a published version cannot be replaced.`,
     )
   }
-  if (value.schemaVersion !== 2) {
-    throw new ActionError(`${filename} schemaVersion must be 2.`)
+  if (value.schemaVersion !== 1) {
+    throw new ActionError(`${filename} schemaVersion must be 1.`)
   }
 
   const publisher = value.publisher
@@ -112,7 +118,7 @@ export function parseManifest(text: string, filename = 'alchemy.new.jsonc'): Man
   }
 
   return {
-    schemaVersion: 2,
+    schemaVersion: 1,
     id: requiredString(value, 'id', filename),
     name: requiredString(value, 'name', filename),
     description: requiredString(value, 'description', filename),

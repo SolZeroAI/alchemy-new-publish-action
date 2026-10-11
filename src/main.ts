@@ -15,6 +15,7 @@ export async function run(): Promise<void> {
       version: core.getInput('version'),
       archive: core.getInput('archive'),
       path: core.getInput('path'),
+      manifest: core.getInput('manifest'),
       include: core.getMultilineInput('include'),
       exclude: core.getMultilineInput('exclude'),
       defaultExcludes: core.getInput('default-excludes'),
@@ -52,6 +53,7 @@ export async function run(): Promise<void> {
     })
     core.setOutput('version', result.version)
     core.setOutput('sha256', result.sha256)
+    core.setOutput('manifest-sha256', result.manifestSha256)
     core.setOutput('size', String(result.sizeBytes))
     core.setOutput('url', result.url)
   } catch (error) {

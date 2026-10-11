@@ -15,6 +15,9 @@ export const DEPLOY_SITE = 'https://alchemy.new'
 export const MANIFEST_FILENAME = 'alchemy.new.jsonc'
 export const CLI_PATH = 'node_modules/alchemy/bin/cli.js'
 
+/** Raw `alchemy.new.jsonc` upload cap. The registry returns `manifest_too_large` above this. */
+export const MAX_MANIFEST_BYTES = 256 * 1024
+
 const MIB = 1024 * 1024
 
 /** Contract cap. The start-upload response echoes this as maxBytes. */

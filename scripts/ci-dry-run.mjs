@@ -80,9 +80,8 @@ if (dry.status !== 0) {
   console.error(dry.stderr)
   process.exit(dry.status ?? 1)
 }
-const packed = dry.summary.split('### Excluded')[0] ?? ''
+const packed = dry.summary.split('### Packed files')[1]?.split('### Excluded')[0] ?? ''
 for (const required of [
-  'alchemy.new.jsonc',
   'alchemy.run.ts',
   'dist/app.js',
   '.env.example',
@@ -91,6 +90,9 @@ for (const required of [
 ]) {
   assert(packed.includes(`\`${required}\``), `dry run did not pack ${required}`)
 }
+assert(!packed.includes('alchemy.new.jsonc'), 'dry run packed the root manifest')
+assert(dry.summary.includes('not in the archive'), 'summary did not say the manifest is excluded')
+assert(dry.summary.includes('Manifest sha256'), 'summary did not include the manifest digest')
 for (const forbidden of [
   '.env',
   '.git',
@@ -105,6 +107,7 @@ for (const forbidden of [
 }
 assert(dry.output.includes('1.2.3'), 'version output missing')
 assert(/sha256<<[\s\S]*[0-9a-f]{64}/.test(dry.output), 'sha256 output missing')
+assert(/manifest-sha256<<[\s\S]*[0-9a-f]{64}/.test(dry.output), 'manifest-sha256 output missing')
 assert(dry.summary.includes('Dry run'), 'summary did not say dry run')
 assert(dry.stdout.includes('Dry run: archive was not uploaded.'), 'log did not say the archive was not uploaded')
 console.log('dry-run fixture ok')
@@ -135,3 +138,34 @@ const bad = runAction({
 assert(bad.status !== 0, 'prebuilt archive containing .git should fail')
 assert(`${bad.stdout}\n${bad.stderr}`.includes('.git'), 'bad archive error did not mention .git')
 console.log('prebuilt .git archive rejected')
+
+const manifestArchive = join(work, 'root-manifest.tar.gz')
+execFileSync('tar', [
+  '-czf',
+  manifestArchive,
+  '-C',
+  ready,
+  'alchemy.new.jsonc',
+  'alchemy.run.ts',
+  'dist',
+  'README.md',
+  '.env.example',
+  'node_modules/alchemy/bin/cli.js',
+  'node_modules/alchemy/package.json',
+  'node_modules/alchemy/cert.pem',
+])
+const rooted = runAction({
+  archive: manifestArchive,
+  manifest: join(ready, 'alchemy.new.jsonc'),
+  'dry-run': 'true',
+  version: '1.2.3',
+  package: 'example-org/example-stack',
+})
+assert(rooted.status !== 0, 'prebuilt archive with a root manifest should fail')
+const rootedLog = `${rooted.stdout}\n${rooted.stderr}`
+assert(rootedLog.includes('alchemy.new.jsonc'), 'root manifest error did not name the file')
+assert(
+  rootedLog.includes('archive root') || rootedLog.includes('invalid_archive'),
+  'root manifest error did not say the archive root copy is rejected',
+)
+console.log('prebuilt root manifest rejected')

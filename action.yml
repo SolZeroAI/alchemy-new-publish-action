@@ -23,6 +23,10 @@ inputs:
   path:
     description: Directory to pack. When archive is omitted, defaults to the workspace.
     required: false
+  manifest:
+    description: Path to alchemy.new.jsonc. Defaults to that file at the package root (the workspace, when archive is set). Uploaded separately and left out of the tar. Comments are preserved.
+    required: false
+    default: alchemy.new.jsonc
   include:
     description: Newline-separated gitignore patterns. When set, only matching paths are considered. Default excludes still apply.
     required: false
@@ -45,7 +49,7 @@ inputs:
     required: false
     default: 'false'
   on-immutable:
-    description: 'When the version is already published: fail, or skip-if-digest-matches.'
+    description: 'When the version is already published: fail, or skip-if-digest-matches. Skip compares the archive sha256 and, when the version record includes it, the manifest sha256.'
     required: false
     default: fail
 outputs:
@@ -53,6 +57,8 @@ outputs:
     description: Published version, without a leading v.
   sha256:
     description: Lowercase hex sha256 of the archive.
+  manifest-sha256:
+    description: Lowercase hex sha256 of the raw alchemy.new.jsonc bytes, including comments.
   size:
     description: Archive size in bytes.
   url:

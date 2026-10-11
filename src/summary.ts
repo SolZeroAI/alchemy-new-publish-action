@@ -6,6 +6,7 @@ export interface SummaryInfo {
   project: string
   version: string
   sha256: string
+  manifestSha256: string
   sizeBytes: number
   fileCount: number
   url: string
@@ -42,7 +43,7 @@ export function renderSummary(info: SummaryInfo): string {
   const result = info.dryRun
     ? 'Dry run. Nothing was uploaded.'
     : info.skipped
-      ? 'Skipped. This version is already published with the same sha256.'
+      ? 'Skipped. This version is already published with the same digests.'
       : 'Published.'
   const lines = [
     '## alchemy.new publish',
@@ -53,6 +54,8 @@ export function renderSummary(info: SummaryInfo): string {
     `| Version | \`${escapeMd(info.version)}\` |`,
     `| Size | ${formatBytes(info.sizeBytes)} (${info.sizeBytes} bytes) |`,
     `| sha256 | \`${info.sha256}\` |`,
+    `| Manifest sha256 | \`${info.manifestSha256}\` |`,
+    `| Manifest | Uploaded separately. \`alchemy.new.jsonc\` is not in the archive. |`,
     `| Files | ${info.fileCount} |`,
     `| Result | ${result} |`,
     `| Deploy URL | ${info.url} |`,

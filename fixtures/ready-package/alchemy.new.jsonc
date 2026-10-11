@@ -1,7 +1,7 @@
 {
   // Fixture manifest. Comments and the trailing comma are intentional.
-  "$schema": "https://alchemy.new/schema/v2/project.json",
-  "schemaVersion": 2,
+  "$schema": "https://alchemy.new/schema/v1/project.json",
+  "schemaVersion": 1,
   "id": "example-stack",
   "name": "Example Stack",
   "description": "Fixture package for the publish action dry run.",

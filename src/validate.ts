@@ -50,22 +50,21 @@ export function assertSafeEntries(entries: readonly ArchiveEntry[]): void {
   }
 }
 
+/**
+ * The registry rejects a root `alchemy.new.jsonc` with `invalid_archive`.
+ * Nested copies are allowed. The manifest is uploaded on its own.
+ */
+export function assertNoRootManifest(entries: readonly ArchiveEntry[]): void {
+  const root = entries.find((entry) => normalizeRelPath(entry.path) === MANIFEST_FILENAME)
+  if (!root) return
+  throw new ActionError(
+    `Archive contains ${MANIFEST_FILENAME} at the archive root. The registry rejects that copy (invalid_archive). Upload it with the manifest input instead. Nested copies of ${MANIFEST_FILENAME} are allowed.`,
+  )
+}
+
 export function assertReadyArchive(entries: readonly ArchiveEntry[], manifest: Manifest): void {
+  assertNoRootManifest(entries)
   const files = memberMap(entries)
-  if (!files.has(MANIFEST_FILENAME)) {
-    const nested = entries.find(
-      (entry) => entry.path !== MANIFEST_FILENAME && entry.path.endsWith(`/${MANIFEST_FILENAME}`),
-    )
-    throw new ActionError(
-      nested
-        ? `${MANIFEST_FILENAME} is at ${nested.path}. The package root must be the archive root, with no wrapping directory.`
-        : `Archive is missing ${MANIFEST_FILENAME} at the archive root.`,
-    )
-  }
-  const manifestEntry = files.get(MANIFEST_FILENAME)
-  if (!manifestEntry || (manifestEntry.type !== 'file' && manifestEntry.type !== 'symlink')) {
-    throw new ActionError(`Archive is missing ${MANIFEST_FILENAME} at the archive root.`)
-  }
   if (!files.has(manifest.entrypoint)) {
     throw new ActionError(
       `Archive is missing deployment entrypoint "${manifest.entrypoint}". alchemy.new runs that file and does not build the app.`,

@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { describe, it } from 'node:test'
 import { authorize } from '../src/auth.ts'
 import { OIDC_AUDIENCE } from '../src/constants.ts'
-import { createRegistryClient } from '../src/registry.ts'
+import { createRegistryClient, explain } from '../src/registry.ts'
 import { uploadArchive } from '../src/upload.ts'
 import { silentLogger } from '../src/log.ts'
 import { json, withServer } from './helpers.ts'
@@ -64,8 +64,15 @@ describe('registry client', () => {
     const bytes = Buffer.from('gzip-bytes-not-validated-here')
     await writeFile(file, bytes)
     const sha256 = createHash('sha256').update(bytes).digest('hex')
+    const manifest = Buffer.from('{"schemaVersion":1}\n')
+    const manifestSha256 = createHash('sha256').update(manifest).digest('hex')
     let puts = 0
-    let completed: { sha256?: string; parts?: Array<{ partNumber: number; etag: string }> } = {}
+    const calls: string[] = []
+    let completed: {
+      sha256?: string
+      manifestSha256?: string
+      parts?: Array<{ partNumber: number; etag: string }>
+    } = {}
     const server = await withServer((req, res, body) => {
       const url = req.url ?? ''
       if (req.method === 'GET') {
@@ -82,7 +89,20 @@ describe('registry client', () => {
         })
         return
       }
+      if (req.method === 'PUT' && url.endsWith('/manifest')) {
+        calls.push('manifest')
+        assert.equal(req.headers.authorization, 'Bearer anr_test')
+        assert.equal(req.headers['content-type'], 'application/json')
+        assert.equal(body.toString('utf8'), manifest.toString('utf8'))
+        json(res, 200, {
+          sha256: manifestSha256,
+          sizeBytes: body.length,
+          contentType: 'application/json',
+        })
+        return
+      }
       if (req.method === 'PUT' && url.includes('/parts/')) {
+        calls.push('part')
         puts += 1
         if (puts === 1) {
           json(res, 503, { message: 'unavailable', code: 'unavailable' })
@@ -101,6 +121,7 @@ describe('registry client', () => {
           project: 'example-stack',
           version: '1.2.3',
           sha256,
+          manifestSha256,
           sizeBytes: bytes.length,
           contentType: 'application/gzip',
           yanked: false,
@@ -131,6 +152,8 @@ describe('registry client', () => {
         version: '1.2.3',
         archivePath: file,
         sha256,
+        manifestBytes: manifest,
+        manifestSha256,
         sizeBytes: bytes.length,
         onImmutable: 'fail',
         log: { info: (message) => logs.push(message), warn: (message) => logs.push(message) },
@@ -140,7 +163,9 @@ describe('registry client', () => {
       assert.equal(result.record.sha256, sha256)
       assert.equal(puts, 2)
       assert.equal(completed.sha256, sha256)
+      assert.equal(completed.manifestSha256, manifestSha256)
       assert.deepEqual(completed.parts, [{ partNumber: 1, etag: '"etag-1"' }])
+      assert.deepEqual(calls, ['manifest', 'part', 'part'])
       assert.ok(logs.some((line) => line.startsWith('Retrying upload part')))
     } finally {
       await server.close()
@@ -154,6 +179,8 @@ describe('registry client', () => {
     const bytes = Buffer.from('abcdef')
     await writeFile(file, bytes)
     const sha256 = createHash('sha256').update(bytes).digest('hex')
+    const manifest = Buffer.from('{"schemaVersion":1}\n')
+    const manifestSha256 = createHash('sha256').update(manifest).digest('hex')
     let aborted = false
     const server = await withServer((req, res) => {
       const url = req.url ?? ''
@@ -168,6 +195,10 @@ describe('registry client', () => {
           maxBytes: 268435456,
           contentType: 'application/gzip',
         })
+        return
+      }
+      if (req.method === 'PUT' && url.endsWith('/manifest')) {
+        json(res, 200, { sha256: manifestSha256, sizeBytes: manifest.length, contentType: 'application/json' })
         return
       }
       if (req.method === 'PUT') {
@@ -200,17 +231,30 @@ describe('registry client', () => {
             version: '1.2.3',
             archivePath: file,
             sha256,
+            manifestBytes: manifest,
+            manifestSha256,
             sizeBytes: bytes.length,
             onImmutable: 'fail',
             log: silentLogger,
             authorize: async () => 'anr_test',
           }),
-        /digest_mismatch|sha256/,
+        /uploaded manifest/,
       )
       assert.equal(aborted, true)
     } finally {
       await server.close()
       await rm(dir, { recursive: true, force: true })
     }
+  })
+})
+
+describe('explain', () => {
+  it('names the manifest and archive digests for the new registry errors', () => {
+    assert.match(explain(400, 'invalid_manifest', 'schema'), /schema version 1/)
+    assert.match(explain(400, 'manifest_required', 'missing'), /before the manifest was uploaded/)
+    assert.match(explain(400, 'manifest_too_large', 'big'), /256 KB/)
+    assert.match(explain(400, 'invalid_content_type', 'type'), /manifest must be application\/json/)
+    assert.match(explain(400, 'digest_mismatch', 'hash'), /archive or the uploaded manifest/)
+    assert.match(explain(400, 'invalid_archive', 'root'), /root alchemy\.new\.jsonc/)
   })
 })

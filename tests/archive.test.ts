@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { describe, it } from 'node:test'
 import { create } from 'tar'
 import { listArchive, packFiles } from '../src/archive.ts'
-import { publish } from '../src/publish.ts'
+import { filesForArchive, publish } from '../src/publish.ts'
 import { selectFiles } from '../src/select.ts'
 import { makePackage } from './helpers.ts'
 
@@ -27,10 +27,9 @@ describe('packing', () => {
         defaultExcludes: true,
       })
       const archive = join(out, 'alchemy.new.tar.gz')
-      await packFiles(pkg.root, selection.files, archive)
+      await packFiles(pkg.root, filesForArchive(selection.files, 'alchemy.new.jsonc'), archive)
       const names = await packedNames(archive)
       for (const required of [
-        'alchemy.new.jsonc',
         'alchemy.run.ts',
         'dist/app.js',
         'README.md',
@@ -41,6 +40,7 @@ describe('packing', () => {
       ]) {
         assert.ok(names.includes(required), `missing ${required}`)
       }
+      assert.equal(names.includes('alchemy.new.jsonc'), false, 'packed the root manifest')
       for (const forbidden of [
         '.git/HEAD',
         '.env',
@@ -190,6 +190,68 @@ describe('packing', () => {
       if (timer) clearTimeout(timer)
       assert.ok(result instanceof Error, `expected a cap error, got ${String(result)}`)
       assert.match(result.message, /size cap/)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+      await rm(out, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps a nested manifest and still omits the root copy', async () => {
+    const pkg = await makePackage()
+    const out = await mkdtemp(join(tmpdir(), 'alchemy-nested-'))
+    try {
+      mkdirSync(join(pkg.root, 'vendor/example'), { recursive: true })
+      writeFileSync(join(pkg.root, 'vendor/example/alchemy.new.jsonc'), '{}\n')
+      const selection = await selectFiles(pkg.root, {
+        includes: [],
+        excludes: [],
+        defaultExcludes: true,
+      })
+      const archive = join(out, 'nested.tar.gz')
+      await packFiles(
+        pkg.root,
+        filesForArchive(selection.files, 'alchemy.new.jsonc'),
+        archive,
+      )
+      const names = await packedNames(archive)
+      assert.equal(names.includes('alchemy.new.jsonc'), false)
+      assert.ok(names.includes('vendor/example/alchemy.new.jsonc'))
+    } finally {
+      await pkg.cleanup()
+      await rm(out, { recursive: true, force: true })
+    }
+  })
+
+  it('fails a dry run when a prebuilt archive contains a root manifest', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'alchemy-root-manifest-'))
+    const out = await mkdtemp(join(tmpdir(), 'alchemy-root-out-'))
+    const archive = join(out, 'with-manifest.tar.gz')
+    try {
+      mkdirSync(join(root, 'node_modules/alchemy/bin'), { recursive: true })
+      writeFileSync(join(root, 'alchemy.new.jsonc'), '{}\n')
+      writeFileSync(join(root, 'alchemy.run.ts'), 'export {}\n')
+      writeFileSync(join(root, 'node_modules/alchemy/bin/cli.js'), 'console.log("alchemy")\n')
+      await create(
+        { gzip: true, cwd: root, file: archive, portable: true },
+        ['alchemy.new.jsonc', 'alchemy.run.ts', 'node_modules'],
+      )
+      await assert.rejects(
+        () =>
+          publish({
+            archive,
+            version: '1.2.3',
+            include: [],
+            exclude: [],
+            defaultExcludes: true,
+            registryUrl: 'https://alchemy.new',
+            dryRun: true,
+            onImmutable: 'fail',
+            fetchImpl: async () => {
+              throw new Error('dry-run called the network')
+            },
+          }),
+        /archive root/,
+      )
     } finally {
       await rm(root, { recursive: true, force: true })
       await rm(out, { recursive: true, force: true })

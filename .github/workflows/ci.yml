@@ -17,26 +17,26 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Setup Node
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - name: Setup nub
+        uses: nubjs/setup-nub@c7b970ec04655a2f0a111cd436cc182a3b660e7a # v0.6.0
         with:
+          nub-version: "0.9.6"
           node-version-file: .node-version
-          cache: npm
 
       - name: Install
-        run: npm ci
+        run: nub ci
 
       - name: Typecheck
-        run: npm run typecheck
+        run: nub run typecheck
 
       - name: Lint
-        run: npm run lint
+        run: nub run lint
 
       - name: Test
-        run: npm test
+        run: nub run test
 
       - name: Build dist
-        run: npm run build
+        run: nub run build
 
       - name: Check dist is up to date
         run: git diff --exit-code -- dist
@@ -54,14 +54,14 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Setup Node
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - name: Setup nub
+        uses: nubjs/setup-nub@c7b970ec04655a2f0a111cd436cc182a3b660e7a # v0.6.0
         with:
+          nub-version: "0.9.6"
           node-version-file: .node-version
-          cache: npm
 
       - name: Install
-        run: npm ci
+        run: nub ci
 
       - name: Pack a tree over 256 MiB uncompressed
         run: node --import tsx scripts/pack-large.mjs

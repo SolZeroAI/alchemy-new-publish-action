@@ -47,30 +47,61 @@ export function planPartLengths(fileSize: number, serverPartSize: number): numbe
   return lengths
 }
 
+function digest(value: string | undefined): string | undefined {
+  if (!value || !/^[0-9a-f]{64}$/i.test(value)) return undefined
+  return value.toLowerCase()
+}
+
+/**
+ * Compare the archive digest, and the manifest digest when the version record exposes one.
+ * A record with no manifestSha256 can still match on the archive digest alone.
+ */
 export function decideImmutable(
   existing: VersionRecord,
   sha256: string,
+  manifestSha256: string,
   onImmutable: OnImmutable,
 ): { record: VersionRecord; skipped: boolean } {
   const yanked = existing.yanked
     ? ' The existing version is yanked. Yanked versions stay immutable and cannot deploy.'
     : ''
-  if (!/^[0-9a-f]{64}$/i.test(existing.sha256)) {
+  const recordedArchive = digest(existing.sha256)
+  if (!recordedArchive) {
     throw new ActionError(
       `Version ${existing.version} is already published, and the registry record has no sha256 to compare.${yanked} Versions are immutable. Publish a new version.`,
     )
   }
-  const matches = existing.sha256.toLowerCase() === sha256.toLowerCase()
-  if (matches && onImmutable === 'skip-if-digest-matches') {
-    return { record: { ...existing, sha256: existing.sha256.toLowerCase() }, skipped: true }
-  }
-  if (matches) {
+  if (recordedArchive !== sha256.toLowerCase()) {
     throw new ActionError(
-      `Version ${existing.version} is already published with the same sha256 (${sha256}). Versions are immutable, so nothing was uploaded.${yanked} Set on-immutable to skip-if-digest-matches to succeed when the digest matches.`,
+      `Version ${existing.version} is already published with sha256 ${recordedArchive}, which does not match this archive (${sha256}). Versions are immutable. Publish a new version.${yanked}`,
     )
   }
+  const recordedManifest = digest(existing.manifestSha256)
+  if (existing.manifestSha256 !== undefined && !recordedManifest) {
+    throw new ActionError(
+      `Version ${existing.version} is already published, and its manifestSha256 is not a sha256 digest.${yanked} Versions are immutable. Publish a new version.`,
+    )
+  }
+  if (recordedManifest && recordedManifest !== manifestSha256.toLowerCase()) {
+    throw new ActionError(
+      `Version ${existing.version} is already published with manifest sha256 ${recordedManifest}, which does not match this manifest (${manifestSha256}). The archive sha256 matches. Versions are immutable. Publish a new version.${yanked}`,
+    )
+  }
+  const sameManifest = recordedManifest
+    ? ` and manifest sha256 (${manifestSha256})`
+    : '. The version record does not include manifestSha256, so that digest was not compared'
+  if (onImmutable === 'skip-if-digest-matches') {
+    return {
+      record: {
+        ...existing,
+        sha256: recordedArchive,
+        ...(recordedManifest ? { manifestSha256: recordedManifest } : {}),
+      },
+      skipped: true,
+    }
+  }
   throw new ActionError(
-    `Version ${existing.version} is already published with sha256 ${existing.sha256.toLowerCase()}, which does not match this archive (${sha256}). Versions are immutable. Publish a new version.${yanked}`,
+    `Version ${existing.version} is already published with the same archive sha256 (${sha256})${sameManifest}. Versions are immutable, so nothing was uploaded.${yanked} Set on-immutable to skip-if-digest-matches to succeed when the digests match.`,
   )
 }
 
@@ -81,6 +112,8 @@ export async function uploadArchive(options: {
   version: string
   archivePath: string
   sha256: string
+  manifestBytes: Buffer
+  manifestSha256: string
   sizeBytes: number
   onImmutable: OnImmutable
   authorize: () => Promise<string>
@@ -88,6 +121,9 @@ export async function uploadArchive(options: {
 }): Promise<{ record: VersionRecord; skipped: boolean }> {
   if (!/^[0-9a-f]{64}$/.test(options.sha256)) {
     throw new ActionError('Internal error: sha256 is not 64 lowercase hex characters.')
+  }
+  if (!/^[0-9a-f]{64}$/.test(options.manifestSha256)) {
+    throw new ActionError('Internal error: manifestSha256 is not 64 lowercase hex characters.')
   }
 
   let authed = false
@@ -110,7 +146,17 @@ export async function uploadArchive(options: {
     }
   }
   if (existing) {
-    const decision = decideImmutable(existing, options.sha256, options.onImmutable)
+    const decision = decideImmutable(
+      existing,
+      options.sha256,
+      options.manifestSha256,
+      options.onImmutable,
+    )
+    if (decision.skipped && !digest(existing.manifestSha256)) {
+      options.log.warn(
+        `Version ${options.version} matches this archive sha256. The version record does not include manifestSha256, so that digest was not compared.`,
+      )
+    }
     if (decision.skipped && existing.yanked) {
       options.log.warn(
         `Version ${options.version} matches this archive but is yanked. Deploys skip yanked versions.`,
@@ -145,6 +191,7 @@ export async function uploadArchive(options: {
 
   try {
     const lengths = planPartLengths(options.sizeBytes, session.partSize)
+    await sendManifest(options, session.uploadId)
     const parts = await sendParts(options, session.uploadId, lengths)
     const record = await options.client.completeUpload({
       org: options.org,
@@ -152,6 +199,7 @@ export async function uploadArchive(options: {
       version: options.version,
       uploadId: session.uploadId,
       sha256: options.sha256,
+      manifestSha256: options.manifestSha256,
       parts: parts.map((part) => ({ partNumber: part.partNumber, etag: part.etag })),
     })
     if (record.sha256.toLowerCase() !== options.sha256) {
@@ -159,7 +207,16 @@ export async function uploadArchive(options: {
         `Registry recorded sha256 ${record.sha256 || '(missing)'}, which does not match ${options.sha256}.`,
       )
     }
-    return { record: { ...record, sha256: options.sha256 }, skipped: false }
+    const recordedManifest = digest(record.manifestSha256)
+    if (recordedManifest !== options.manifestSha256) {
+      throw new ActionError(
+        `Registry recorded manifest sha256 ${record.manifestSha256 || '(missing)'}, which does not match ${options.manifestSha256}.`,
+      )
+    }
+    return {
+      record: { ...record, sha256: options.sha256, manifestSha256: options.manifestSha256 },
+      skipped: false,
+    }
   } catch (error) {
     if (error instanceof RegistryError && error.code === 'immutable_version') {
       await safeAbort(options, session.uploadId)
@@ -178,6 +235,7 @@ async function rethrowOrSkip(
     project: string
     version: string
     sha256: string
+    manifestSha256: string
     onImmutable: OnImmutable
     log: Logger
   },
@@ -189,7 +247,36 @@ async function rethrowOrSkip(
   await ensureAuth()
   const again = await options.client.getVersion(options.org, options.project, options.version)
   if (!again) throw error
-  return decideImmutable(again, options.sha256, options.onImmutable)
+  return decideImmutable(again, options.sha256, options.manifestSha256, options.onImmutable)
+}
+
+async function sendManifest(
+  options: {
+    client: RegistryClient
+    org: string
+    project: string
+    version: string
+    manifestBytes: Buffer
+    manifestSha256: string
+    log: Logger
+  },
+  uploadId: string,
+): Promise<void> {
+  const result = await options.client.uploadManifest({
+    org: options.org,
+    project: options.project,
+    version: options.version,
+    uploadId,
+    body: options.manifestBytes,
+  })
+  if (digest(result.sha256) !== options.manifestSha256) {
+    throw new ActionError(
+      `Registry recorded manifest sha256 ${result.sha256 || '(missing)'}, which does not match ${options.manifestSha256}.`,
+    )
+  }
+  options.log.info(
+    `Uploaded manifest (${options.manifestBytes.length} bytes, sha256 ${options.manifestSha256}).`,
+  )
 }
 
 async function sendParts(

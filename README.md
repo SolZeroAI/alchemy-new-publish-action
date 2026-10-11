@@ -2,7 +2,7 @@
 
 GitHub Action that packs a ready-to-deploy archive and publishes an immutable version to the alchemy.new package registry.
 
-alchemy.new deploys that archive into a visitor's cloud account. It does not install dependencies or build the app. The archive root is the package root, and it must contain `alchemy.new.jsonc`, the deployment entrypoint, and `node_modules/alchemy/bin/cli.js`.
+alchemy.new deploys that archive into a visitor's cloud account. It does not install dependencies or build the app. The archive root is the package root. It must contain the deployment entrypoint and `node_modules/alchemy/bin/cli.js`. `alchemy.new.jsonc` is uploaded beside the archive, not inside it.
 
 The action uses [OIDC trusted publishing](#trusted-publisher) unless you pass an `anr_` API token. It does not print credentials.
 
@@ -105,13 +105,14 @@ Paste an `anr_` token only. An `anu_` grant cannot be pasted into `token`. The a
 | `version` | git tag, then `source.version` | Exact semver without build metadata. A tag `v1.2.3` becomes `1.2.3`. |
 | `archive` | | Prebuilt `.tar.gz` whose root is the package root. Mutually exclusive with `path`. |
 | `path` | workspace, when `archive` is omitted | Directory to pack. |
+| `manifest` | `alchemy.new.jsonc` at the package root | Raw manifest file. Uploaded separately. Comments are kept. At most 256 KB. |
 | `include` | pack the directory | Newline-separated gitignore patterns. Only matching paths are considered. |
 | `exclude` | | Extra gitignore patterns, dropped in addition to the defaults. |
 | `default-excludes` | `true` | Drop VCS metadata, secrets, tests, caches, and dev junk. |
 | `registry-url` | production API origin | API origin. The action appends `/v1/...`. |
 | `token` | OIDC exchange | `anr_` API token. |
 | `dry-run` | `false` | Validate and write the summary. Do not call the registry. |
-| `on-immutable` | `fail` | `fail` or `skip-if-digest-matches`. |
+| `on-immutable` | `fail` | `fail`, or `skip-if-digest-matches` when the archive sha256 matches and the manifest sha256 matches if the version record has one. |
 
 `include` and `exclude` accept `#` comments on their own lines.
 
@@ -121,10 +122,11 @@ Paste an `anr_` token only. An `anu_` grant cannot be pasted into `token`. The a
 | --- | --- |
 | `version` | Published version, without a leading `v`. |
 | `sha256` | Lowercase hex sha256 of the archive. |
+| `manifest-sha256` | Lowercase hex sha256 of the raw manifest bytes, including comments. |
 | `size` | Archive size in bytes. |
 | `url` | Deploy URL, `https://alchemy.new/?package=org/project&version=1.2.3`. |
 
-The job summary lists the archive size, digest, packed files, and paths the packer excluded. A dry run sets the same outputs from the local archive.
+The job summary lists the archive size, both digests, packed files, and paths the packer excluded. It also says `alchemy.new.jsonc` is not in the archive. A dry run sets the same outputs from the local files.
 
 ## What gets packed
 
@@ -132,7 +134,8 @@ Pass `archive` when the release job already built a `.tar.gz`. Otherwise the act
 
 The action does not install or prune dependencies. It refuses to upload an archive that fails the same checks the registry and the runner do:
 
-- `alchemy.new.jsonc` at the archive root, schema version 2, `source.kind` of `registry`, and a `source` that names this package
+- `alchemy.new.jsonc` is schema version 1, `source.kind` is `registry`, and `source` names this package. When `source.version` is set, it is the version being published
+- the root `alchemy.new.jsonc` is not a member of the archive. Nested copies may stay. A prebuilt archive that contains a root copy fails before upload
 - `deployment.entrypoint` present in the archive
 - `node_modules/alchemy/bin/cli.js` present
 - no `.git` or `.alchemy`
@@ -140,6 +143,7 @@ The action does not install or prune dependencies. It refuses to upload an archi
 - no `.npmrc`
 - no private key
 - gzip, at most 256 MiB
+- manifest at most 256 KB
 
 A checkout's `.git` directory and a local `.env` are dropped while packing. A prebuilt archive that still contains them fails before upload. Setting `default-excludes: false`, or naming a secret in `include`, fails instead of uploading that file.
 
@@ -171,9 +175,9 @@ Packing writes a temporary `.tar.gz` on disk. File bytes are read and compressed
 
 Publishing the same version again is a conflict. The action looks up the version first.
 
-- Digests differ: the run fails and prints both sha256 values. Publish a new version.
-- Digests match and `on-immutable` is `fail`: the run fails and tells you the bytes are already published.
-- Digests match and `on-immutable` is `skip-if-digest-matches`: the run succeeds, sets outputs from that version, and does not upload.
+- The archive sha256 differs, or the version record includes a manifest sha256 that differs: the run fails and prints the digests. Publish a new version.
+- The digests match and `on-immutable` is `fail`: the run fails and tells you the bytes are already published.
+- The digests match and `on-immutable` is `skip-if-digest-matches`: the run succeeds, sets outputs from that version, and does not upload. A version record with no `manifestSha256` is compared on the archive digest only.
 - A yanked version is still immutable. The message says it cannot be replaced and will not deploy.
 
 ```yaml
@@ -192,11 +196,12 @@ with:
 | Exchange a GitHub OIDC token | `POST /v1/oidc/github/exchange` with `{ token, org, project }` and no `Authorization` header |
 | See whether the version exists | `GET /v1/packages/{org}/{project}/versions/{version}` |
 | Start a multipart upload | `POST /v1/packages/{org}/{project}/versions/{version}/uploads` |
+| Upload the manifest | `PUT .../uploads/{uploadId}/manifest` with the raw file bytes and `Content-Type: application/json` |
 | Upload each part | `PUT .../uploads/{uploadId}/parts/{partNumber}` with `Content-Type: application/octet-stream` |
-| Finish | `POST .../complete` with `{ sha256, parts: [{ partNumber, etag }] }` |
+| Finish | `POST .../complete` with `{ sha256, manifestSha256, parts: [{ partNumber, etag }] }` |
 | Give up after a failed upload | `POST .../abort` |
 
-Parts use the `partSize` from the start response. A small archive is one part. Every part is at most 8 MiB, and every part except the last is at least 5 MiB. Transient HTTP 408, 429, 500, 502, 503, and 504 responses, and network failures, retry up to four times with backoff. A `Retry-After` header is honored. The sha256 is computed locally and sent on complete. The registry hashes the object again.
+The manifest goes up after the upload starts and before the parts. A second PUT before complete would replace it. Complete without a manifest returns `manifest_required`. Parts use the `partSize` from the start response. A small archive is one part. Every part is at most 8 MiB, and every part except the last is at least 5 MiB. Transient HTTP 408, 429, 500, 502, 503, and 504 responses, and network failures, retry up to four times with backoff. A `Retry-After` header is honored. Both digests are computed locally and sent on complete. The registry hashes the objects again.
 
 This action does not yank, deprecate, mint tokens, or submit a listing. `POST /v1/registry/submissions` is a separate review step and does not use this credential.
 
@@ -208,7 +213,8 @@ That production worker's OpenAPI document, as fetched while this action was writ
 
 Other readings, where the contract was loose:
 
-- The version lookup response body is not specified. The action treats a 200 as the same version record that complete returns, including `sha256` and `yanked`. A record without a sha256 cannot be skipped.
+- The version lookup response body is not specified. The action treats a 200 as the same version record that complete returns, including `sha256`, `manifestSha256`, and `yanked`. A record without a sha256 cannot be skipped. A record without `manifestSha256` can be skipped when the archive sha256 matches, because that digest is not there to compare. A record that includes a different manifest sha256 cannot be skipped.
+- Schema version is 1. There is no schema v2. The attached project schema's `source` list names GitHub releases and npm only, while the registry API requires `source.kind` of `registry` for this publish. The publisher skill's compatibility note still says to use schema version 2 and that version 1 is retired. This action follows the registry API: schema version 1 and a registry source. It does not require a particular `$schema` URL. The skill uses `https://alchemy.new/schema/project.json`. The schema document's id is `https://alchemy.new/schema/v1/project.json`.
 - `immutable_version` is specified as the result of publishing an existing version, not which call returns it. The action handles it on the version lookup, on start, and on complete.
 - There is no list-parts call. A dropped connection retries the current part, then aborts the upload. A later job starts a new upload.
 - The exchange example sends the GitHub JWT in the JSON body. The action does not also send it as `Authorization`, because that header is an `anr_` or `anu_` credential.
@@ -219,6 +225,6 @@ Other readings, where the contract was loose:
 
 ## Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). The action is JavaScript for Node 24, bundled to `dist/index.cjs`. CI typechecks, lints, tests, and fails if the bundle is stale. It also dry-runs the bundle against `fixtures/ready-package` and checks that a prebuilt archive containing `.git` is rejected.
+See [CONTRIBUTING.md](CONTRIBUTING.md). The action is JavaScript for Node 24, bundled to `dist/index.cjs`. Dependencies install with nub. CI typechecks, lints, tests, and fails if the bundle is stale. It also dry-runs the bundle against `fixtures/ready-package`, checks that a prebuilt archive containing `.git` is rejected, and checks that a prebuilt archive with `alchemy.new.jsonc` at its root is rejected. Releases are cut by Tegami on `master`. The floating `v1` tag moves only for a stable 1.x release.
 
 [Security reports](SECURITY.md) go through GitHub private vulnerability reporting.

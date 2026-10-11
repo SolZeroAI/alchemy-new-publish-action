@@ -17,8 +17,8 @@ export function manifestText(options?: {
     : ''
   return `{
   // ready for alchemy.new
-  "$schema": "https://alchemy.new/schema/v2/project.json",
-  "schemaVersion": 2,
+  "$schema": "https://alchemy.new/schema/v1/project.json",
+  "schemaVersion": 1,
   "id": "example-stack",
   "name": "Example Stack",
   "description": "A fixture package.",

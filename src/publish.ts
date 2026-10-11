@@ -1,12 +1,19 @@
+import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
-import { join, resolve } from 'node:path'
-import { CLI_PATH, MANIFEST_FILENAME, RECOMMENDED_ARCHIVE_BYTES } from './constants.ts'
+import { isAbsolute, join, relative, resolve } from 'node:path'
+import {
+  CLI_PATH,
+  MANIFEST_FILENAME,
+  MAX_MANIFEST_BYTES,
+  RECOMMENDED_ARCHIVE_BYTES,
+} from './constants.ts'
 import { ActionError } from './errors.ts'
 import { formatBytes } from './bytes.ts'
 import type { Logger } from './log.ts'
 import { silentLogger } from './log.ts'
-import { parseManifest } from './manifest.ts'
+import { parseManifest, type Manifest } from './manifest.ts'
 import { resolvePackage } from './package-ref.ts'
+import { normalizeRelPath } from './paths.ts'
 import { resolveVersion } from './semver.ts'
 import { selectFiles } from './select.ts'
 import {
@@ -16,11 +23,15 @@ import {
   memberMap,
   packFiles,
   pathExists,
-  readArchiveText,
   sha256File,
   tempArchivePath,
 } from './archive.ts'
-import { assertArchiveSize, assertReadyArchive, assertSafeEntries } from './validate.ts'
+import {
+  assertArchiveSize,
+  assertNoRootManifest,
+  assertReadyArchive,
+  assertSafeEntries,
+} from './validate.ts'
 import { createRegistryClient, normalizeRegistryUrl, type RegistryClient } from './registry.ts'
 import { authorize } from './auth.ts'
 import { uploadArchive, type OnImmutable } from './upload.ts'
@@ -34,6 +45,7 @@ export interface PublishOptions {
   version?: string
   archive?: string
   path?: string
+  manifest?: string
   include: string[]
   exclude: string[]
   defaultExcludes: boolean
@@ -57,10 +69,50 @@ export interface PublishResult {
   project: string
   version: string
   sha256: string
+  manifestSha256: string
   sizeBytes: number
   url: string
   dryRun: boolean
   skipped: boolean
+}
+
+interface LoadedManifest {
+  bytes: Buffer
+  sha256: string
+  manifest: Manifest
+}
+
+/**
+ * Drop the root manifest from the tar. The registry rejects `alchemy.new.jsonc`
+ * at the archive root. A manifest file that itself sits at the package root is
+ * dropped even when its name differs. Nested copies stay.
+ */
+export function filesForArchive(
+  files: readonly string[],
+  manifestRelative: string | undefined,
+): string[] {
+  return files.filter((file) => !omittedFromArchive(file, manifestRelative))
+}
+
+function omittedFromArchive(file: string, manifestRelative: string | undefined): boolean {
+  if (file === MANIFEST_FILENAME) return true
+  return (
+    manifestRelative !== undefined && !manifestRelative.includes('/') && file === manifestRelative
+  )
+}
+
+export function resolveManifestFile(options: {
+  manifest?: string
+  path?: string
+  archive?: string
+  workspace?: string
+}): string {
+  const packageDirectory = options.archive
+    ? undefined
+    : resolve(options.path ?? options.workspace ?? process.cwd())
+  const base = packageDirectory ?? resolve(options.workspace ?? process.cwd())
+  if (!options.manifest) return join(base, MANIFEST_FILENAME)
+  return isAbsolute(options.manifest) ? options.manifest : resolve(base, options.manifest)
 }
 
 export async function publish(options: PublishOptions): Promise<PublishResult> {
@@ -90,29 +142,30 @@ export async function publish(options: PublishOptions): Promise<PublishResult> {
   await assertGzip(prepared.archivePath)
   const entries = await listArchive(prepared.archivePath)
   assertSafeEntries(entries)
-  const manifestText = await readArchiveText(prepared.archivePath, MANIFEST_FILENAME)
-  const manifest = parseManifest(manifestText)
-  assertReadyArchive(entries, manifest)
+  assertNoRootManifest(entries)
+  const loaded = prepared.loaded ?? (await loadManifest(resolveManifestFile(options)))
+  assertReadyArchive(entries, loaded.manifest)
 
   const pkg = resolvePackage({
     ...(options.packageInput ? { packageInput: options.packageInput } : {}),
     ...(options.org ? { org: options.org } : {}),
     ...(options.project ? { project: options.project } : {}),
-    manifestOrg: manifest.source.org,
-    manifestProject: manifest.source.project,
+    manifestOrg: loaded.manifest.source.org,
+    manifestProject: loaded.manifest.source.project,
   })
   const version = resolveVersion({
     ...(options.version ? { explicit: options.version } : {}),
     ...(options.gitRef ? { gitRef: options.gitRef } : {}),
-    ...(manifest.source.version ? { manifestVersion: manifest.source.version } : {}),
+    ...(loaded.manifest.source.version ? { manifestVersion: loaded.manifest.source.version } : {}),
   })
   const sha256 = await sha256File(prepared.archivePath)
   const files = [...memberMap(entries).keys()].sort()
   const url = deployUrl(pkg.org, pkg.project, version)
 
   log.info(
-    `${options.dryRun ? 'Dry run for' : 'Publishing'} ${pkg.org}/${pkg.project}@${version} to ${registryUrl} (${formatBytes(sizeBytes)}, sha256 ${sha256}).`,
+    `${options.dryRun ? 'Dry run for' : 'Publishing'} ${pkg.org}/${pkg.project}@${version} to ${registryUrl} (${formatBytes(sizeBytes)}, sha256 ${sha256}, manifest sha256 ${loaded.sha256}).`,
   )
+  log.info(`${MANIFEST_FILENAME} is not in the archive. It is uploaded separately.`)
   for (const file of files.slice(0, 200)) log.info(`pack ${file}`)
   if (files.length > 200) log.info(`pack … ${files.length - 200} more files`)
   for (const file of prepared.excluded.slice(0, 50)) log.info(`exclude ${file}`)
@@ -125,6 +178,7 @@ export async function publish(options: PublishOptions): Promise<PublishResult> {
     project: pkg.project,
     version,
     sha256,
+    manifestSha256: loaded.sha256,
     sizeBytes,
     fileCount: files.length,
     url,
@@ -145,6 +199,7 @@ export async function publish(options: PublishOptions): Promise<PublishResult> {
       project: pkg.project,
       version,
       sha256,
+      manifestSha256: loaded.sha256,
       sizeBytes,
       url,
       dryRun: true,
@@ -177,6 +232,8 @@ export async function publish(options: PublishOptions): Promise<PublishResult> {
     version,
     archivePath: prepared.archivePath,
     sha256,
+    manifestBytes: loaded.bytes,
+    manifestSha256: loaded.sha256,
     sizeBytes,
     onImmutable: options.onImmutable,
     log,
@@ -194,7 +251,7 @@ export async function publish(options: PublishOptions): Promise<PublishResult> {
 
   if (outcome.skipped) {
     log.info(
-      `Skipped upload. ${pkg.org}/${pkg.project}@${version} is already published with sha256 ${sha256}.`,
+      `Skipped upload. ${pkg.org}/${pkg.project}@${version} is already published with archive sha256 ${sha256}.`,
     )
   } else {
     log.info(`Published ${pkg.org}/${pkg.project}@${version}.`)
@@ -206,6 +263,7 @@ export async function publish(options: PublishOptions): Promise<PublishResult> {
     project: pkg.project,
     version,
     sha256,
+    manifestSha256: loaded.sha256,
     sizeBytes,
     fileCount: files.length,
     url,
@@ -224,6 +282,7 @@ export async function publish(options: PublishOptions): Promise<PublishResult> {
     project: pkg.project,
     version,
     sha256,
+    manifestSha256: loaded.sha256,
     sizeBytes,
     url,
     dryRun: false,
@@ -235,6 +294,8 @@ interface PreparedArchive {
   archivePath: string
   excluded: string[]
   excludedCount: number
+  /** Set when the directory packer already read the manifest. Prebuilt archives load it after safety checks. */
+  loaded?: LoadedManifest
 }
 
 async function preparePrebuilt(archivePath: string, log: Logger): Promise<PreparedArchive> {
@@ -245,13 +306,9 @@ async function preparePrebuilt(archivePath: string, log: Logger): Promise<Prepar
 async function prepareDirectory(options: PublishOptions, log: Logger): Promise<PreparedArchive> {
   const directory = resolve(options.path ?? options.workspace ?? process.cwd())
   log.info(`Packing ${directory}.`)
-  const manifestPath = join(directory, MANIFEST_FILENAME)
-  if (!(await pathExists(manifestPath))) {
-    throw new ActionError(
-      `${directory} is missing ${MANIFEST_FILENAME}. alchemy.new deploys the manifest from the archive.`,
-    )
-  }
-  const manifest = parseManifest(await readFile(manifestPath, 'utf8'))
+  const manifestFile = resolveManifestFile(options)
+  const loaded = await loadManifest(manifestFile)
+  const manifestRelative = relativeInside(directory, manifestFile)
   const selection = await selectFiles(directory, {
     includes: options.include,
     excludes: options.exclude,
@@ -261,18 +318,53 @@ async function prepareDirectory(options: PublishOptions, log: Logger): Promise<P
     const lines = selection.rejected.slice(0, 20).map((item) => `${item.path}: ${item.reason}`)
     throw new ActionError(`Refusing to pack forbidden files:\n${lines.join('\n')}`)
   }
-  const selected = new Set(selection.files)
-  await assertPresent(directory, MANIFEST_FILENAME, selected, MANIFEST_FILENAME)
-  await assertPresent(directory, manifest.entrypoint, selected, 'deployment entrypoint')
+  const files = filesForArchive(selection.files, manifestRelative)
+  const selected = new Set(files)
+  await assertPresent(directory, loaded.manifest.entrypoint, selected, 'deployment entrypoint')
   await assertPresent(directory, CLI_PATH, selected, CLI_PATH)
   const archivePath = await tempArchivePath()
-  await packFiles(directory, selection.files, archivePath)
+  await packFiles(directory, files, archivePath)
   log.info(`Wrote ${archivePath}.`)
+  const omitted = selection.files.filter((file) => omittedFromArchive(file, manifestRelative))
   return {
     archivePath,
-    excluded: selection.excluded,
-    excludedCount: selection.excludedCount,
+    excluded: [...selection.excluded, ...omitted],
+    excludedCount: selection.excludedCount + omitted.length,
+    loaded,
   }
+}
+
+async function loadManifest(manifestPath: string): Promise<LoadedManifest> {
+  let bytes: Buffer
+  try {
+    bytes = await readFile(manifestPath)
+  } catch (error) {
+    const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : ''
+    if (code === 'ENOENT') {
+      throw new ActionError(
+        `Missing manifest at ${manifestPath}. Pass manifest, or place ${MANIFEST_FILENAME} at the package root. The manifest is uploaded separately and is not read from the archive.`,
+      )
+    }
+    throw error
+  }
+  if (bytes.length > MAX_MANIFEST_BYTES) {
+    throw new ActionError(
+      `Manifest at ${manifestPath} is ${bytes.length} bytes, above the 256 KB limit (${MAX_MANIFEST_BYTES}). The registry returns manifest_too_large.`,
+    )
+  }
+  return {
+    bytes,
+    sha256: createHash('sha256').update(bytes).digest('hex'),
+    manifest: parseManifest(bytes.toString('utf8'), manifestPath),
+  }
+}
+
+function relativeInside(directory: string, filePath: string): string | undefined {
+  const rel = relative(directory, filePath)
+  if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) return undefined
+  const normalized = normalizeRelPath(rel)
+  if (!normalized) return undefined
+  return normalized
 }
 
 async function assertPresent(

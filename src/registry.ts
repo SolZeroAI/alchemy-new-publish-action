@@ -10,6 +10,8 @@ export interface VersionRecord {
   project: string
   version: string
   sha256: string
+  /** Present when the version record exposes the manifest digest. */
+  manifestSha256?: string
   sizeBytes: number
   contentType?: string
   yanked: boolean
@@ -52,12 +54,20 @@ export interface RegistryClient {
     partNumber: number
     body: Buffer
   }): Promise<PartResult>
+  uploadManifest(input: {
+    org: string
+    project: string
+    version: string
+    uploadId: string
+    body: Buffer
+  }): Promise<{ sha256: string; sizeBytes: number; contentType?: string }>
   completeUpload(input: {
     org: string
     project: string
     version: string
     uploadId: string
     sha256: string
+    manifestSha256: string
     parts: CompletedPart[]
   }): Promise<VersionRecord>
   abortUpload(org: string, project: string, version: string, uploadId: string): Promise<void>
@@ -271,13 +281,45 @@ export function createRegistryClient(options: RegistryClientOptions): RegistryCl
       const partNumber = typeof body.partNumber === 'number' ? body.partNumber : input.partNumber
       return { partNumber, etag, sizeBytes }
     },
+    async uploadManifest(input) {
+      const path = `${packageVersionPath(input.org, input.project, input.version)}/uploads/${encodeURIComponent(input.uploadId)}/manifest`
+      const response = await withRetry(
+        'upload manifest',
+        async () => {
+          const result = await request('PUT', path, {
+            body: input.body,
+            contentType: 'application/json',
+            timeoutMs: 60_000,
+          })
+          if (result.status !== 200) {
+            fail(result.status, result.text, result.headers, 'Uploading the manifest failed')
+          }
+          return result
+        },
+        log,
+        sleepFn,
+      )
+      const body = parseJson(response.text, 'manifest upload')
+      const sha256 = stringField(body, 'sha256') ?? ''
+      const sizeBytes = typeof body.sizeBytes === 'number' ? body.sizeBytes : input.body.length
+      const contentType = stringField(body, 'contentType')
+      return {
+        sha256,
+        sizeBytes,
+        ...(contentType ? { contentType } : {}),
+      }
+    },
     async completeUpload(input) {
       const path = `${packageVersionPath(input.org, input.project, input.version)}/uploads/${encodeURIComponent(input.uploadId)}/complete`
       const response = await withRetry(
         'complete upload',
         async () => {
           const result = await request('POST', path, {
-            json: { sha256: input.sha256, parts: input.parts },
+            json: {
+              sha256: input.sha256,
+              manifestSha256: input.manifestSha256,
+              parts: input.parts,
+            },
           })
           if (result.status !== 200) {
             fail(result.status, result.text, result.headers, 'Completing the upload failed')
@@ -341,6 +383,9 @@ export function parseVersionRecord(
     project: stringField(body, 'project') ?? project,
     version: stringField(body, 'version') ?? version,
     sha256: stringField(body, 'sha256') ?? '',
+    ...(stringField(body, 'manifestSha256')
+      ? { manifestSha256: stringField(body, 'manifestSha256') }
+      : {}),
     sizeBytes: typeof body.sizeBytes === 'number' ? body.sizeBytes : 0,
     ...(stringField(body, 'contentType') ? { contentType: stringField(body, 'contentType') } : {}),
     yanked: body.yanked === true,
@@ -378,13 +423,19 @@ export function explain(status: number, code: string | undefined, detail: string
     case 'invalid_version':
       return `The version is not exact semver without build metadata. ${detail}`
     case 'invalid_archive':
-      return `The registry rejected the archive. It must be a ready .tar.gz with alchemy.new.jsonc, the entrypoint, and node_modules/alchemy/bin/cli.js, and without .git or secret files. ${detail}`
+      return `The registry rejected the archive. It must be a gzip tar of the package root with the entrypoint and node_modules/alchemy/bin/cli.js, and without a root alchemy.new.jsonc, .git, or secret files. The manifest is uploaded separately. ${detail}`
+    case 'invalid_manifest':
+      return `The registry rejected the manifest. Check schema version 1, source.kind "registry", and that org, project, and source.version match this publish. ${detail}`
+    case 'manifest_required':
+      return `Complete ran before the manifest was uploaded. Upload alchemy.new.jsonc to the manifest endpoint, then complete. ${detail}`
+    case 'manifest_too_large':
+      return `The manifest is over the 256 KB limit. ${detail}`
     case 'invalid_content_type':
-      return `The registry expected a gzip archive. ${detail}`
+      return `The registry rejected the content type. Archive parts must be application/octet-stream or application/gzip. The manifest must be application/json or application/octet-stream. ${detail}`
     case 'archive_too_large':
       return `The archive or a part exceeds the registry cap (256 MiB archive, 8 MiB part). ${detail}`
     case 'digest_mismatch':
-      return `The registry sha256 does not match the uploaded bytes. ${detail}`
+      return `The registry digest does not match the uploaded archive or the uploaded manifest. ${detail}`
     case 'upload_expired':
       return `The upload window elapsed before completion. Re-run the job. ${detail}`
     case 'rate_limited':
