@@ -1,2 +1,224 @@
-# alchemy-new-publish-action
-GitHub Action to publish packaged, versioned releases to the alchemy.new registry with OIDC trusted publishing.
+# Publish to alchemy.new
+
+GitHub Action that packs a ready-to-deploy archive and publishes an immutable version to the alchemy.new package registry.
+
+alchemy.new deploys that archive into a visitor's cloud account. It does not install dependencies or build the app. The archive root is the package root, and it must contain `alchemy.new.jsonc`, the deployment entrypoint, and `node_modules/alchemy/bin/cli.js`.
+
+The action uses [OIDC trusted publishing](#trusted-publisher) unless you pass an `anr_` API token. It does not print credentials.
+
+## Example
+
+Build on `linux/amd64` (the deploy sandbox's platform), then publish. The version defaults to the git tag, with one leading `v` removed. `package` can be omitted when `alchemy.new.jsonc` already names `source.org` and `source.project`.
+
+```yaml
+name: Publish to alchemy.new
+
+on:
+  release:
+    types: [published]
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Build and publish (linux/amd64)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install and build
+        run: |
+          npm ci --omit=dev
+          npm run build
+
+      - name: Publish to alchemy.new
+        uses: SolZeroAI/alchemy-new-publish-action@v1
+        with:
+          package: example-org/example-stack
+          path: .
+```
+
+Install with the package manager the project actually uses, on `linux/amd64`, and omit dev dependencies. The Alchemy publisher guide uses `nub install --frozen-lockfile`. If the package manager keeps its store inside the project (pnpm and Yarn Berry do), that store has to be inside `path` so links still resolve after extract.
+
+A prebuilt archive works too. `org` and `project` are separate inputs so the registry's example works unchanged:
+
+```yaml
+- uses: SolZeroAI/alchemy-new-publish-action@v1
+  with:
+    org: example-org
+    project: example-stack
+    version: 1.2.3
+    archive: alchemy.new.tar.gz
+```
+
+`@v1` exists after the first stable release. Until then, pin a commit SHA.
+
+## Trusted publisher
+
+No long-lived registry secret is required.
+
+1. Sign in at [alchemy.new](https://alchemy.new).
+2. Open the [packages page](https://alchemy.new/packages) and create the org and the package.
+3. Add a trusted publisher for this repository (`owner/name`). You can also restrict the workflow file name (for example `publish.yml`), the GitHub Environment, and the git ref.
+4. Give the job `permissions: id-token: write`.
+
+The action requests an OIDC token for `https://alchemy.new/registry/publish` and exchanges it at `POST /v1/oidc/github/exchange`. The registry returns a package-scoped `anu_` grant that expires in 15 minutes. That grant is not a long-lived secret, and this action does not store it.
+
+## Token fallback
+
+Use an `anr_` API token when the job cannot request an OIDC token. An admin mints it from the package page. It is shown once, it expires, and it can be revoked. It can publish that package (or every package in the org, if it was minted that way). It cannot mint tokens, change members, or yank versions.
+
+```yaml
+permissions:
+  contents: read
+
+steps:
+  - uses: SolZeroAI/alchemy-new-publish-action@v1
+    with:
+      package: example-org/example-stack
+      path: .
+      token: ${{ secrets.ALCHEMY_NEW_TOKEN }}
+```
+
+Paste an `anr_` token only. An `anu_` grant cannot be pasted into `token`. The action masks the value with `::add-mask::` before it logs anything.
+
+## Inputs
+
+| Input | Default | Description |
+| --- | --- | --- |
+| `package` | manifest `source` | `org/project`. Must match `alchemy.new.jsonc`. |
+| `org` | manifest `source.org` | Registry org. Must match the manifest when both are set. |
+| `project` | manifest `source.project` | Registry project. Must match the manifest when both are set. |
+| `version` | git tag, then `source.version` | Exact semver without build metadata. A tag `v1.2.3` becomes `1.2.3`. |
+| `archive` | | Prebuilt `.tar.gz` whose root is the package root. Mutually exclusive with `path`. |
+| `path` | workspace, when `archive` is omitted | Directory to pack. |
+| `include` | pack the directory | Newline-separated gitignore patterns. Only matching paths are considered. |
+| `exclude` | | Extra gitignore patterns, dropped in addition to the defaults. |
+| `default-excludes` | `true` | Drop VCS metadata, secrets, tests, caches, and dev junk. |
+| `registry-url` | production API origin | API origin. The action appends `/v1/...`. |
+| `token` | OIDC exchange | `anr_` API token. |
+| `dry-run` | `false` | Validate and write the summary. Do not call the registry. |
+| `on-immutable` | `fail` | `fail` or `skip-if-digest-matches`. |
+
+`include` and `exclude` accept `#` comments on their own lines.
+
+## Outputs
+
+| Output | Description |
+| --- | --- |
+| `version` | Published version, without a leading `v`. |
+| `sha256` | Lowercase hex sha256 of the archive. |
+| `size` | Archive size in bytes. |
+| `url` | Deploy URL, `https://alchemy.new/?package=org/project&version=1.2.3`. |
+
+The job summary lists the archive size, digest, packed files, and paths the packer excluded. A dry run sets the same outputs from the local archive.
+
+## What gets packed
+
+Pass `archive` when the release job already built a `.tar.gz`. Otherwise the action packs `path`. The package root is the archive root. There is no wrapping directory.
+
+The action does not install or prune dependencies. It refuses to upload an archive that fails the same checks the registry and the runner do:
+
+- `alchemy.new.jsonc` at the archive root, schema version 2, `source.kind` of `registry`, and a `source` that names this package
+- `deployment.entrypoint` present in the archive
+- `node_modules/alchemy/bin/cli.js` present
+- no `.git` or `.alchemy`
+- no secret env file (`.env.example` and `.env.sample` may stay)
+- no `.npmrc`
+- no private key
+- gzip, at most 256 MiB
+
+A checkout's `.git` directory and a local `.env` are dropped while packing. A prebuilt archive that still contains them fails before upload. Setting `default-excludes: false`, or naming a secret in `include`, fails instead of uploading that file.
+
+### Default excludes
+
+These paths are left out of a packed archive when `default-excludes` is `true`. `include` does not pull a hard-rejected path back in. To pack a test fixture or other soft-excluded path, set `default-excludes: false` and pass the files in `include`. Hard-rejected files still fail the run, so also `exclude` anything you do not want to fail on, such as `.git`.
+
+**Hard-rejected.** A packed tree drops them. A prebuilt archive that contains them fails. An `include` that selects them fails.
+
+- `.git`, `.alchemy`, `.hg`, `.svn`
+- `.env`, `.env.*` other than `.env.example` and `.env.sample`, `.envrc`, and files ending in `.env`
+- `.npmrc`, `.netrc`
+- `id_rsa`, `id_dsa`, `id_ecdsa`, `id_ed25519`, including inside `node_modules` (`.pub` files are not keys)
+- `*.pem` outside `node_modules` (`node_modules/**/*.pem` may stay)
+- `*.key`, `*.p12`, `*.pfx`, `*.p8` anywhere
+
+**Also excluded by default.** A prebuilt archive may still contain these. Packing drops them.
+
+- tests: `__tests__`, `__mocks__`, `test`, `tests`, `coverage`, `.nyc_output`, `.pytest_cache`, `*.test.*`, `*.spec.*`
+- caches: `.cache`, `.turbo`, `.parcel-cache`, `.next/cache`
+- editor and CI metadata: `.github`, `.circleci`, `.gitlab`, `.buildkite`, `.husky`, `.vscode`, `.idea`, `.aws`
+- junk: `.DS_Store`, `Thumbs.db`, `.eslintcache`, `.stylelintcache`, `*.log`, `*.tsbuildinfo`, `*.tar.gz`, `*.tgz`, `.gitmodules`
+
+Symlinks that point outside the archive fail. Symlinks inside the archive stay, so a package-manager store that uses them still extracts. The store itself has to be inside `path`.
+
+Archives over 80 MiB produce a warning. Archives over 256 MiB fail before upload.
+
+## Immutable versions
+
+Publishing the same version again is a conflict. The action looks up the version first.
+
+- Digests differ: the run fails and prints both sha256 values. Publish a new version.
+- Digests match and `on-immutable` is `fail`: the run fails and tells you the bytes are already published.
+- Digests match and `on-immutable` is `skip-if-digest-matches`: the run succeeds, sets outputs from that version, and does not upload.
+- A yanked version is still immutable. The message says it cannot be replaced and will not deploy.
+
+```yaml
+with:
+  on-immutable: skip-if-digest-matches
+```
+
+## Dry run
+
+`dry-run: true` packs, validates, hashes, prints the file list, and writes the job summary. It does not exchange a token or call the registry. `id-token: write` is not required.
+
+## Registry calls
+
+| Step | Request |
+| --- | --- |
+| Exchange a GitHub OIDC token | `POST /v1/oidc/github/exchange` with `{ token, org, project }` and no `Authorization` header |
+| See whether the version exists | `GET /v1/packages/{org}/{project}/versions/{version}` |
+| Start a multipart upload | `POST /v1/packages/{org}/{project}/versions/{version}/uploads` |
+| Upload each part | `PUT .../uploads/{uploadId}/parts/{partNumber}` with `Content-Type: application/octet-stream` |
+| Finish | `POST .../complete` with `{ sha256, parts: [{ partNumber, etag }] }` |
+| Give up after a failed upload | `POST .../abort` |
+
+Parts use the `partSize` from the start response. A small archive is one part. Every part is at most 8 MiB, and every part except the last is at least 5 MiB. Transient HTTP 408, 429, 500, 502, 503, and 504 responses, and network failures, retry up to four times with backoff. A `Retry-After` header is honored. The sha256 is computed locally and sent on complete. The registry hashes the object again.
+
+This action does not yank, deprecate, mint tokens, or submit a listing. `POST /v1/registry/submissions` is a separate review step and does not use this credential.
+
+## Contract notes
+
+The publish contract calls the base URL "the alchemy.new API origin" and does not name a host. `https://alchemy.new` is the website. A request to `https://alchemy.new/v1/...` returns HTTP 500 `{"error":"Only HTML requests are supported here"}`. The live web app calls `https://alchemy-new-api-prod.jonbeckman.workers.dev`, so that origin is the default `registry-url`. The deploy URL stays on `https://alchemy.new`.
+
+That production worker's OpenAPI document, as fetched while this action was written, does not list `/v1/oidc/github/exchange` or `/v1/packages/...` yet. Those routes are the unpublished registry contract this action implements. `GET /v1/packages/example-org/example-stack` on that host returned an empty 404. Nothing here was uploaded to a live registry.
+
+Other readings, where the contract was loose:
+
+- The version lookup response body is not specified. The action treats a 200 as the same version record that complete returns, including `sha256` and `yanked`. A record without a sha256 cannot be skipped.
+- `immutable_version` is specified as the result of publishing an existing version, not which call returns it. The action handles it on the version lookup, on start, and on complete.
+- There is no list-parts call. A dropped connection retries the current part, then aborts the upload. A later job starts a new upload.
+- The exchange example sends the GitHub JWT in the JSON body. The action does not also send it as `Authorization`, because that header is an `anr_` or `anu_` credential.
+- Part bodies are slices of the gzip file, so the part `Content-Type` is `application/octet-stream`. The contract allows that or `application/gzip`. The stored object is `application/gzip`.
+- "Private key names" is not an exhaustive list. The action rejects `id_rsa`, `id_dsa`, `id_ecdsa`, `id_ed25519`, `*.key`, `*.p12`, `*.pfx`, and `*.p8` everywhere, plus `*.pem` outside `node_modules`. It also rejects `.netrc`, `.envrc`, and `*.env`. `.env.example` and `.env.sample` are the only env-file exceptions.
+- `source.version` is optional. When it is set, it must be the version being published. A mismatch fails before upload, because a published version cannot be replaced.
+- One-click parameter checks belong to listing review, not to this upload.
+
+## Development
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). The action is JavaScript for Node 24, bundled to `dist/index.cjs`. CI typechecks, lints, tests, and fails if the bundle is stale. It also dry-runs the bundle against `fixtures/ready-package` and checks that a prebuilt archive containing `.git` is rejected.
+
+[Security reports](SECURITY.md) go through GitHub private vulnerability reporting.

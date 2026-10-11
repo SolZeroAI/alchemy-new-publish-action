@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: Verify the release and move the major tag
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Build dist
+        run: npm run build
+
+      - name: Check dist is committed
+        run: git diff --exit-code -- dist
+
+      - name: Dry-run the bundle
+        run: node scripts/ci-dry-run.mjs
+
+      - name: Move the major tag
+        env:
+          TAG: ${{ github.event.release.tag_name || github.ref_name }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+        run: bash scripts/move-major-tag.sh
