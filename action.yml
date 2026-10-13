@@ -1,0 +1,68 @@
+name: Publish to alchemy.new
+description: Pack a ready archive and publish an immutable version to the alchemy.new package registry.
+author: SolZeroAI
+branding:
+  icon: upload-cloud
+  color: blue
+inputs:
+  package:
+    description: Package coordinate as org/project. Defaults to source.org and source.project in alchemy.new.jsonc.
+    required: false
+  org:
+    description: Registry org slug. Use with project, or instead of package. Must match the manifest source.
+    required: false
+  project:
+    description: Registry project name. Use with org, or instead of package. Must match the manifest source.
+    required: false
+  version:
+    description: Exact semver without build metadata. Defaults to the git tag (v1.2.3), then source.version in alchemy.new.jsonc.
+    required: false
+  archive:
+    description: Path to a prebuilt .tar.gz whose root is the package root. Mutually exclusive with path.
+    required: false
+  path:
+    description: Directory to pack. When archive is omitted, defaults to the workspace.
+    required: false
+  manifest:
+    description: Path to alchemy.new.jsonc. Defaults to that file at the package root (the workspace, when archive is set). Uploaded separately and left out of the tar. Comments are preserved.
+    required: false
+    default: alchemy.new.jsonc
+  include:
+    description: Newline-separated gitignore patterns. When set, only matching paths are considered. Default excludes still apply.
+    required: false
+  exclude:
+    description: Newline-separated gitignore patterns dropped in addition to the default excludes.
+    required: false
+  default-excludes:
+    description: Drop VCS metadata, secrets, tests, caches, and dev junk before packing. Hard-rejected files still fail the run.
+    required: false
+    default: "true"
+  registry-url:
+    description: Registry API origin. The action appends /v1/.... The website at alchemy.new does not serve this API.
+    required: false
+    default: https://alchemy-new-api-prod.jonbeckman.workers.dev
+  token:
+    description: Optional anr_ API token. When omitted, the action exchanges a GitHub OIDC token. Never printed.
+    required: false
+  dry-run:
+    description: Pack, validate, hash, and write the summary without calling the registry.
+    required: false
+    default: "false"
+  on-immutable:
+    description: "When the version is already published: fail, or skip-if-digest-matches. Skip compares the archive sha256 and, when the version record includes it, the manifest sha256."
+    required: false
+    default: fail
+outputs:
+  version:
+    description: Published version, without a leading v.
+  sha256:
+    description: Lowercase hex sha256 of the archive.
+  manifest-sha256:
+    description: Lowercase hex sha256 of the raw alchemy.new.jsonc bytes, including comments.
+  size:
+    description: Archive size in bytes.
+  url:
+    description: Deploy URL for this exact version.
+runs:
+  using: node24
+  main: dist/index.cjs
