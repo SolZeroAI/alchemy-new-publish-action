@@ -46,12 +46,12 @@ One paragraph.
 
 When a pull request does not change the published action, add the GitHub label `release:none` and do not add a `.tegami/` entry. The label has to exist on the repository before Tegami will honor it.
 
-`.github/workflows/release.yml` runs after the Validate workflow succeeds on a push to `master`.
+`.github/workflows/release.yml` runs after the Validate workflow succeeds on a push to `master`. The job mints a GitHub App installation token with `actions/create-github-app-token`, pinned by commit SHA. Secrets `RELEASE_APP_ID` and `RELEASE_APP_PRIVATE_KEY` identify the app. The token is limited to this repository and requests contents write and pull requests write. Checkout and `nub run tegami ci` use that token. The floating `v1` tag move uses the same token.
 
-1. A push that adds changelog files versions the package, writes `VERSION`, and opens a pull request from `tegami/version-packages` onto `master`.
+1. A push that adds changelog files versions the package, writes `VERSION`, and opens a pull request from `tegami/version-packages` onto `master`. The app opens that pull request, so GitHub starts Validate and Tegami PR Preview.
 2. Merging that pull request leaves a publish lock on `master`. The next run creates the GitHub release and the immutable tag `alchemy-new-publish-action@1.2.3`. `scripts/action-release.mts` does that step. Tegami's npm publish does not run for this private package.
 
-After Tegami creates a stable `1.x.y` tag, the same job moves the floating `v1` tag to that commit. Prereleases and other majors do not move `v1`. `v1` is not a GitHub Release. The semver tag is never force-pushed. `scripts/move-v1-tag.mts` pushes only when `GITHUB_ACTIONS` is set, and only `refs/tags/v1`.
+After Tegami creates a stable `1.x.y` tag, the same job moves the floating `v1` tag to that commit. Prereleases and other majors do not move `v1`. `v1` is not a GitHub Release. The semver tag is never force-pushed. `scripts/move-v1-tag.mts` pushes only when `GITHUB_ACTIONS` is set, and only `refs/tags/v1`. Validate runs on a push to the `master` branch and on a pull request into `master`. A tag push is outside that trigger, so moving `v1` does not start another release.
 
 Pull requests also run Tegami PR Preview, which uploads a release note artifact. Tegami PR Comment posts that note from a trusted checkout of the default branch. The preview job does not receive a token that can write to the repository.
 
