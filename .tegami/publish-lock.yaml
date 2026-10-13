@@ -1,0 +1,11 @@
+core:changelogs:
+  - content: "---\npackages:\n  npm:alchemy-new-publish-action:\n    type: major\n---\n\n## Initial release\n\nPublish a ready archive to the alchemy.new package registry. The manifest is uploaded separately from the tar, and the floating v1 tag tracks each stable 1.x release.\n"
+    filename: initial-release.md
+    v: 0.0.0
+core:packages:
+  - changelogIds:
+      - initial-release.md
+    id: npm:alchemy-new-publish-action
+    updated: true
+npm:packages:
+  - id: npm:alchemy-new-publish-action
