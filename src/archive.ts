@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto"
 import { createReadStream, createWriteStream, type Stats } from "node:fs"
-import { lstat, mkdir, mkdtemp, open, readFile, readlink, rm, stat } from "node:fs/promises"
+import { lstat, mkdir, mkdtemp, open, readlink, rm, stat } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { Gzip } from "minizlib"
-import { extract, list, WriteEntry, type ReadEntry } from "tar"
+import { list, WriteEntry, type ReadEntry } from "tar"
 import { formatBytes } from "./bytes.ts"
-import { MAX_ARCHIVE_BYTES, MANIFEST_FILENAME } from "./constants.ts"
+import { MAX_ARCHIVE_BYTES } from "./constants.ts"
 import { ActionError } from "./errors.ts"
 import { normalizeRelPath, resolvedSymlink, symlinkResolvesInside } from "./paths.ts"
 import { hardRejectReason } from "./rules.ts"
@@ -77,33 +77,6 @@ export async function listArchive(archivePath: string): Promise<ArchiveEntry[]> 
     },
   })
   return entries
-}
-
-export async function readArchiveText(archivePath: string, member: string): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "alchemy-new-manifest-"))
-  try {
-    await extract({
-      file: archivePath,
-      cwd: dir,
-      strict: true,
-      filter: (path) => normalizeRelPath(path) === member,
-    })
-    const text = await readFile(join(dir, member), "utf8")
-    if (text.length > 1_000_000) {
-      throw new ActionError(`${member} is larger than 1 MiB.`)
-    }
-    return text
-  } catch (error) {
-    if (error instanceof ActionError) throw error
-    const code = typeof error === "object" && error && "code" in error ? String(error.code) : ""
-    if (code === "ENOENT") {
-      throw new ActionError(`Archive is missing ${member} at the archive root.`)
-    }
-    const message = error instanceof Error ? error.message : String(error)
-    throw new ActionError(`Could not read ${member} from the archive: ${message}`)
-  } finally {
-    await rm(dir, { recursive: true, force: true })
-  }
 }
 
 /** One file is read at a time, in chunks, so a large tree does not sit in memory. */
@@ -321,5 +294,3 @@ export async function pathExists(filePath: string): Promise<boolean> {
     return false
   }
 }
-
-export { MANIFEST_FILENAME }
