@@ -23,11 +23,6 @@ const TEST_DIRS = new Set([
 ])
 const TEST_FILE = /\.(?:test|spec)\.[^.]+$/
 
-export function baseName(posixPath: string): string {
-  const slash = posixPath.lastIndexOf("/")
-  return slash === -1 ? posixPath : posixPath.slice(slash + 1)
-}
-
 export function isSecretEnvFile(base: string): boolean {
   if (base === ".env") return true
   if (base === ".envrc") return true
