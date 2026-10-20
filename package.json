@@ -14,7 +14,7 @@
     "lint:fix": "NODE_OPTIONS='--import tsx' oxlint --fix",
     "test": "node --import tsx --test tests/**/*.test.ts",
     "tegami": "tsx scripts/tegami.mts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsrs --noEmit"
   },
   "dependencies": {
     "@actions/core": "^3.0.1",
@@ -30,6 +30,7 @@
     "oxfmt": "0.72.0",
     "oxlint": "1.87.0",
     "tegami": "1.5.0",
+    "tsrs": "0.18.0-ts7.1.0-dev.20260929",
     "tsx": "^4.20.6",
     "typescript": "7.0.2"
   },
