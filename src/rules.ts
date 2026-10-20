@@ -23,7 +23,7 @@ const TEST_DIRS = new Set([
 ])
 const TEST_FILE = /\.(?:test|spec)\.[^.]+$/
 
-export function isSecretEnvFile(base: string): boolean {
+function isSecretEnvFile(base: string): boolean {
   if (base === ".env") return true
   if (base === ".envrc") return true
   if (base.startsWith(".env.") && !ENV_ALLOW.has(base)) return true
@@ -31,7 +31,7 @@ export function isSecretEnvFile(base: string): boolean {
   return false
 }
 
-export function isPrivateKeyName(base: string): boolean {
+function isPrivateKeyName(base: string): boolean {
   const lower = base.toLowerCase()
   if (lower.endsWith(".pub")) return false
   return PRIVATE_KEY_BASENAMES.some((name) => lower === name || lower.startsWith(`${name}.`))

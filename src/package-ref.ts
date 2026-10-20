@@ -2,12 +2,12 @@ import { ActionError } from "./errors.ts"
 
 const SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 
-export interface PackageRef {
+interface PackageRef {
   org: string
   project: string
 }
 
-export function parsePackage(input: string): PackageRef {
+function parsePackage(input: string): PackageRef {
   const trimmed = input.trim()
   const slash = trimmed.indexOf("/")
   if (slash <= 0 || trimmed.indexOf("/", slash + 1) !== -1) {
@@ -19,7 +19,7 @@ export function parsePackage(input: string): PackageRef {
   }
 }
 
-export function assertSegment(value: string, label: string): string {
+function assertSegment(value: string, label: string): string {
   if (!SEGMENT.test(value)) {
     throw new ActionError(
       `Package ${label} must be 1-64 characters of letters, numbers, ".", "_", or "-", and start with a letter or number. Received ${JSON.stringify(value)}.`,

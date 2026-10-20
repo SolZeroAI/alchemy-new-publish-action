@@ -8,7 +8,7 @@ const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.
  * Undefined when the value is not exact semver.
  * Build metadata is rejected by the caller so the error can name it.
  */
-export function parseSemver(input: string): string | undefined {
+function parseSemver(input: string): string | undefined {
   const trimmed = input.trim()
   const bare = trimmed.startsWith("v") ? trimmed.slice(1) : trimmed
   if (!SEMVER.test(bare)) return undefined

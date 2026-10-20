@@ -11,7 +11,7 @@ export function sleep(ms: number): Promise<void> {
 
 const TRANSIENT_STATUS = new Set([408, 429, 500, 502, 503, 504])
 
-export function isTransient(error: unknown): boolean {
+function isTransient(error: unknown): boolean {
   if (error instanceof RegistryError) return TRANSIENT_STATUS.has(error.status)
   if (error instanceof Error) {
     if (error.name === "TimeoutError" || error.name === "AbortError") return true
@@ -20,7 +20,7 @@ export function isTransient(error: unknown): boolean {
   return false
 }
 
-export function backoffMs(attempt: number, retryAfterMs?: number): number {
+function backoffMs(attempt: number, retryAfterMs?: number): number {
   const exponential = Math.min(15_000, 500 * 2 ** (attempt - 1))
   const jitter = Math.floor(Math.random() * 250)
   const computed = exponential + jitter

@@ -1,7 +1,7 @@
 import { formatBytes } from "./bytes.ts"
 import { DEPLOY_SITE } from "./constants.ts"
 
-export interface SummaryInfo {
+interface SummaryInfo {
   org: string
   project: string
   version: string

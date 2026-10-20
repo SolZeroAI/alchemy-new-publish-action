@@ -1,5 +1,5 @@
 /** Package name Tegami uses in `name@version` git tags. */
-export const PACKAGE_TAG_NAME = "alchemy-new-publish-action"
+const PACKAGE_TAG_NAME = "alchemy-new-publish-action"
 
 const RELEASE =
   /^(?:(?<name>[A-Za-z0-9._-]+)@|v)(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)\.(?<patch>0|[1-9]\d*)(?:-(?<pre>[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/

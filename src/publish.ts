@@ -38,7 +38,7 @@ import { uploadArchive, type OnImmutable } from "./upload.ts"
 import { deployUrl, renderSummary } from "./summary.ts"
 import type { Sleep } from "./retry.ts"
 
-export interface PublishOptions {
+interface PublishOptions {
   packageInput?: string
   org?: string
   project?: string
@@ -64,7 +64,7 @@ export interface PublishOptions {
   writeSummary?: (markdown: string) => Promise<void>
 }
 
-export interface PublishResult {
+interface PublishResult {
   org: string
   project: string
   version: string
@@ -101,7 +101,7 @@ function omittedFromArchive(file: string, manifestRelative: string | undefined):
   )
 }
 
-export function resolveManifestFile(options: {
+function resolveManifestFile(options: {
   manifest?: string
   path?: string
   archive?: string
