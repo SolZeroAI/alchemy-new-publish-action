@@ -85,7 +85,7 @@ const PACK_READ_BYTES = 256 * 1024
 /** Two 512-byte blocks of zeros. A tar archive ends with them. */
 const TAR_EOF = Buffer.alloc(1024)
 
-export interface PackOptions {
+interface PackOptions {
   /** Compressed size limit. Packing stops once the gzip exceeds this. */
   maxBytes?: number
 }

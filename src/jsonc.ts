@@ -9,7 +9,7 @@ export function parseJsonc(text: string): unknown {
   }
 }
 
-export function stripJsonc(text: string): string {
+function stripJsonc(text: string): string {
   return stripTrailingCommas(stripComments(text))
 }
 

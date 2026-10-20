@@ -18,7 +18,7 @@ export interface VersionRecord {
   publishedAt?: string
 }
 
-export interface UploadSession {
+interface UploadSession {
   uploadId: string
   partSize: number
   maxBytes: number
@@ -26,13 +26,13 @@ export interface UploadSession {
   contentType?: string
 }
 
-export interface PartResult {
+interface PartResult {
   partNumber: number
   etag: string
   sizeBytes: number
 }
 
-export interface CompletedPart {
+interface CompletedPart {
   partNumber: number
   etag: string
 }
@@ -73,7 +73,7 @@ export interface RegistryClient {
   abortUpload(org: string, project: string, version: string, uploadId: string): Promise<void>
 }
 
-export interface RegistryClientOptions {
+interface RegistryClientOptions {
   registryUrl: string
   fetchImpl?: typeof fetch
   log?: Logger
@@ -104,7 +104,7 @@ export function normalizeRegistryUrl(input: string): string {
   return url.origin
 }
 
-export function packageVersionPath(org: string, project: string, version: string): string {
+function packageVersionPath(org: string, project: string, version: string): string {
   return `/v1/packages/${encodeURIComponent(org)}/${encodeURIComponent(project)}/versions/${encodeURIComponent(version)}`
 }
 
@@ -382,7 +382,7 @@ function parseErrorBody(text: string): { message?: string; code?: string } | und
   }
 }
 
-export function parseVersionRecord(
+function parseVersionRecord(
   body: Record<string, unknown>,
   org: string,
   project: string,

@@ -7,7 +7,7 @@ import type { RegistryClient, VersionRecord } from "./registry.ts"
 
 export type OnImmutable = "fail" | "skip-if-digest-matches"
 
-export function resolvePartSize(fileSize: number, serverPartSize: number): number {
+function resolvePartSize(fileSize: number, serverPartSize: number): number {
   if (!Number.isInteger(serverPartSize) || serverPartSize <= 0) {
     throw new ActionError(`Registry returned an invalid partSize (${String(serverPartSize)}).`)
   }
@@ -50,7 +50,7 @@ function digest(value: string | undefined): string | undefined {
  * Compare the archive digest, and the manifest digest when the version record exposes one.
  * A record with no manifestSha256 can still match on the archive digest alone.
  */
-export function decideImmutable(
+function decideImmutable(
   existing: VersionRecord,
   sha256: string,
   manifestSha256: string,

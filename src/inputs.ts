@@ -2,7 +2,7 @@ import { DEFAULT_REGISTRY_URL } from "./constants.ts"
 import { ActionError } from "./errors.ts"
 import type { OnImmutable } from "./upload.ts"
 
-export interface ActionInputs {
+interface ActionInputs {
   packageInput?: string
   org?: string
   project?: string
@@ -25,7 +25,7 @@ export function parseList(value: string | readonly string[] | undefined): string
   return lines.map((line) => line.trim()).filter((line) => line.length > 0 && !line.startsWith("#"))
 }
 
-export function parseBoolean(name: string, value: string | undefined, fallback: boolean): boolean {
+function parseBoolean(name: string, value: string | undefined, fallback: boolean): boolean {
   if (value === undefined || value.trim() === "") return fallback
   if (value === "true" || value === "True" || value === "TRUE") return true
   if (value === "false" || value === "False" || value === "FALSE") return false

@@ -5,13 +5,13 @@ import { ActionError } from "./errors.ts"
 import { hardRejectReason, isDefaultExcluded } from "./rules.ts"
 import { normalizeRelPath } from "./paths.ts"
 
-export interface SelectOptions {
+interface SelectOptions {
   includes: string[]
   excludes: string[]
   defaultExcludes: boolean
 }
 
-export interface Selection {
+interface Selection {
   files: string[]
   excluded: string[]
   excludedCount: number
@@ -32,7 +32,7 @@ function matcher(patterns: string[], label: string): PatternMatcher {
   }
 }
 
-export function assertRelativePatterns(label: string, patterns: string[]): void {
+function assertRelativePatterns(label: string, patterns: string[]): void {
   for (const pattern of patterns) {
     const body = pattern.startsWith("!") ? pattern.slice(1) : pattern
     if (body.startsWith("/") || body.split("/").includes("..")) {
