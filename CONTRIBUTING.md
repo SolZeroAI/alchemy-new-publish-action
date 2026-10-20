@@ -12,7 +12,7 @@ node scripts/ci-dry-run.mjs
 node --import tsx scripts/pack-large.mjs
 ```
 
-`nub run check` typechecks, runs oxlint, checks formatting with oxfmt, runs the unit tests, and builds `dist/index.cjs`. Commit `dist/index.cjs` with the source change. CI rejects a pull request whose bundle does not match `nub run build`.
+`nub run check` typechecks with `tsrs --noEmit`, runs oxlint, checks formatting with oxfmt, runs the unit tests, and builds `dist/index.cjs`. Commit `dist/index.cjs` with the source change. CI rejects a pull request whose bundle does not match `nub run build`.
 
 `nub.lock` is the lockfile. Do not add `package-lock.json`; nub stays in npm mode while that file exists. Do not add ESLint, Prettier, Biome, or dprint. Lint and format are oxlint `1.87.0` and oxfmt `0.72.0`. `anti-slop` is installed from `github:dmmulroy/anti-slop` and its rules are warnings until a cleanup pull request.
 
