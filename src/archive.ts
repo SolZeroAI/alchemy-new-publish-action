@@ -1,15 +1,15 @@
 import { createHash } from "node:crypto"
 import { createReadStream, createWriteStream, type Stats } from "node:fs"
-import { lstat, mkdir, mkdtemp, open, readlink, rm, stat } from "node:fs/promises"
+import { lstat, mkdir, mkdtemp, open, readlink, rm, stat, symlink } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { dirname, isAbsolute, join, relative, resolve as resolvePath, sep } from "node:path"
-import { relative as posixRelative } from "node:path/posix"
+import { dirname, join } from "node:path"
 import { Gzip } from "minizlib"
 import { list, WriteEntry, type ReadEntry } from "tar"
 import { formatBytes } from "./bytes.ts"
 import { MAX_ARCHIVE_BYTES } from "./constants.ts"
 import { ActionError } from "./errors.ts"
-import { normalizeRelPath, resolvedSymlink, symlinkResolvesInside } from "./paths.ts"
+import { symlinkArchiveTarget, symlinkProblem } from "./links.ts"
+import { normalizeRelPath, resolvedSymlink } from "./paths.ts"
 import { hardRejectReason } from "./rules.ts"
 
 export interface ArchiveEntry {
@@ -89,6 +89,12 @@ const TAR_EOF = Buffer.alloc(1024)
 interface PackOptions {
   /** Compressed size limit. Packing stops once the gzip exceeds this. */
   maxBytes?: number
+  /**
+   * Paths stored as these relative symlinks instead of the filesystem node.
+   * Used when `node_modules/alchemy` is a directory symlink and each child
+   * must be its own archive member.
+   */
+  links?: ReadonlyMap<string, string>
 }
 
 /**
@@ -98,8 +104,10 @@ interface PackOptions {
  * into that file. The archive is not buffered in memory. Symlinks are stored
  * as symlinks. An absolute symlink whose target stays inside the package root
  * is stored as the equivalent relative symlink. The link on disk is not
- * changed. A symlink that points outside the package root, or at a forbidden
- * path, fails the pack.
+ * changed. A path in `options.links` is stored as that relative symlink even
+ * when the filesystem path is a file reached through a directory symlink. A
+ * symlink that points outside the package root, or at a forbidden path, fails
+ * the pack.
  */
 export async function packFiles(
   root: string,
@@ -112,6 +120,15 @@ export async function packFiles(
   }
   const maxBytes = options.maxBytes ?? MAX_ARCHIVE_BYTES
   await mkdir(dirname(destination), { recursive: true })
+  let scratch: string | undefined
+  let scratchCount = 0
+  const materializeLink = async (linkTarget: string): Promise<string> => {
+    scratch ??= await mkdtemp(join(dirname(destination), "alchemy-links-"))
+    const source = join(scratch, String(scratchCount))
+    scratchCount += 1
+    await symlink(linkTarget, source)
+    return source
+  }
   const gzip = new Gzip({ portable: true })
   const output = createWriteStream(destination)
   const linkCache = new Map<`${number}:${number}`, string>()
@@ -161,28 +178,50 @@ export async function packFiles(
   })
 
   try {
-    for (const relativePath of files) {
+    try {
+      for (const relativePath of files) {
+        if (failed) throw failed
+        const linkTarget = options.links?.get(relativePath)
+        if (linkTarget !== undefined) {
+          const problem = symlinkProblem(relativePath, linkTarget)
+          if (problem) throw new ActionError(problem)
+          const source = await materializeLink(linkTarget)
+          await writePackedEntry(
+            gzip,
+            root,
+            relativePath,
+            linkCache,
+            statCache,
+            () => failed,
+            source,
+            linkTarget,
+          )
+          continue
+        }
+        const archiveLink = await assertSymlinkAllowed(root, relativePath)
+        await writePackedEntry(
+          gzip,
+          root,
+          relativePath,
+          linkCache,
+          statCache,
+          () => failed,
+          join(root, relativePath),
+          archiveLink,
+        )
+      }
       if (failed) throw failed
-      const archiveLink = await assertSymlinkAllowed(root, relativePath)
-      await writePackedEntry(
-        gzip,
-        root,
-        relativePath,
-        linkCache,
-        statCache,
-        () => failed,
-        archiveLink,
-      )
+      gzip.end(TAR_EOF)
+      await closed
+      if (failed) throw failed
+    } catch (error) {
+      const cause = fail(error)
+      await closed
+      await rm(destination, { force: true })
+      throw cause
     }
-    if (failed) throw failed
-    gzip.end(TAR_EOF)
-    await closed
-    if (failed) throw failed
-  } catch (error) {
-    const cause = fail(error)
-    await closed
-    await rm(destination, { force: true })
-    throw cause
+  } finally {
+    if (scratch) await rm(scratch, { recursive: true, force: true })
   }
 }
 
@@ -221,53 +260,6 @@ async function assertSymlinkAllowed(
   return archiveTarget
 }
 
-function isAbsoluteLinkTarget(target: string): boolean {
-  return target.startsWith("/") || /^[A-Za-z]:[\\/]/.test(target) || isAbsolute(target)
-}
-
-/**
- * Relative archive link for `target`. The original string is kept when it is
- * already relative and stays inside the package. Null when the target leaves
- * the package root.
- */
-function symlinkArchiveTarget(root: string, relativePath: string, target: string): string | null {
-  if (!isAbsoluteLinkTarget(target)) {
-    return symlinkResolvesInside(relativePath, target) ? target : null
-  }
-  return absoluteSymlinkArchiveTarget(root, relativePath, target)
-}
-
-/**
- * Nub and pnpm store links are often absolute and still point inside the
- * package. Return the equivalent relative link. Null when the resolved target
- * leaves the package root. This does not read or write the filesystem.
- */
-function absoluteSymlinkArchiveTarget(
-  root: string,
-  relativePath: string,
-  target: string,
-): string | null {
-  // `resolve` on a POSIX host joins a drive-letter target onto the working
-  // directory. That target cannot name a path inside this package.
-  if (process.platform !== "win32" && /^[A-Za-z]:[\\/]/.test(target)) return null
-  const fromRoot = relative(resolvePath(root), resolvePath(target))
-  if (fromRoot !== "" && isAbsolute(fromRoot)) return null
-  const packageRelative = normalizeRelPath(fromRoot.split(sep).join("/"))
-  if (packageRelative === null) return null
-  const slash = relativePath.lastIndexOf("/")
-  const dir = slash === -1 ? "." : relativePath.slice(0, slash)
-  const link = posixRelative(dir, packageRelative === "" ? "." : packageRelative)
-  const archiveTarget = link === "" ? "." : link
-  if (!symlinkResolvesInside(relativePath, archiveTarget)) return null
-  const resolved = resolvedSymlink(relativePath, archiveTarget)
-  if (packageRelative === "") {
-    if (resolved !== "") return null
-  } else if (resolved !== packageRelative) {
-    return null
-  }
-  return archiveTarget
-}
-
 function writePackedEntry(
   gzip: Gzip,
   root: string,
@@ -275,6 +267,7 @@ function writePackedEntry(
   linkCache: Map<`${number}:${number}`, string>,
   statCache: Map<string, Stats>,
   getFailure: () => Error | undefined,
+  sourcePath: string,
   archiveLink?: string,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -285,7 +278,7 @@ function writePackedEntry(
     }
     const entry = new WriteEntry(relativePath, {
       cwd: root,
-      absolute: join(root, relativePath),
+      absolute: sourcePath,
       portable: true,
       strict: true,
       linkCache,

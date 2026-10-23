@@ -50,7 +50,7 @@ jobs:
           path: .
 ```
 
-Install with the package manager the project actually uses, on `linux/amd64`, and omit dev dependencies. The Alchemy publisher guide uses `nub install --frozen-lockfile`. If the package manager keeps its store inside the project (pnpm and Yarn Berry do), that store has to be inside `path` so links still resolve after extract.
+Install with the package manager the project actually uses, on `linux/amd64`, and omit dev dependencies. The Alchemy publisher guide uses `nub install --frozen-lockfile`. If the package manager keeps its store inside the project (pnpm and Yarn Berry do), that store has to be inside `path` so links still resolve after extract. A `node_modules/alchemy` symlink into that store is expanded while packing.
 
 A prebuilt archive works too. `org` and `project` are separate inputs so the registry's example works unchanged:
 
@@ -134,7 +134,7 @@ The action does not install or prune dependencies. It refuses to upload an archi
 - `alchemy.new.jsonc` is schema version 1, `source.kind` is `registry`, and `source` names this package. When `source.version` is set, it is the version being published
 - the root `alchemy.new.jsonc` is not a member of the archive. Nested copies may stay. A prebuilt archive that contains a root copy fails before upload
 - `deployment.entrypoint` present in the archive
-- `node_modules/alchemy/bin/cli.js` present
+- `node_modules/alchemy/bin/cli.js` present as a file, or as a relative symlink to a path inside the package. A directory symlink at `node_modules/alchemy` does not count
 - no `.git` or `.alchemy`
 - no secret env file (`.env.example` and `.env.sample` may stay)
 - no `.npmrc`
@@ -169,6 +169,8 @@ These paths are left out of a packed archive when `default-excludes` is `true`. 
 `*.d.ts`, `*.map`, and `*.md` stay outside `node_modules`. A build or a runtime may import that markdown. The same three names under `node_modules` are soft excludes. `include` does not put them back while `default-excludes` is `true`.
 
 Symlinks are stored as symlinks. That is what pnpm and nub need inside `node_modules`. When the action packs a directory, an absolute symlink whose target stays inside the package root is written into the archive as the equivalent relative symlink. The link on disk is not changed. A symlink that leaves the package root fails the run, and nothing is uploaded. A symlink that points at a forbidden path, such as `.env` or `.git`, fails the same way. A prebuilt archive that contains an absolute symlink also fails. The store the links point at has to be inside `path`.
+
+nub and pnpm often make `node_modules/alchemy` a directory symlink into that store, for example `node_modules/.store/...`. The registry requires `node_modules/alchemy/bin/cli.js` as its own archive member and does not walk the directory symlink. When that link points at a directory inside the package root, the action packs each file under it as a relative symlink to the store copy, and packs the store copy as well. An absolute directory symlink is expanded the same way when its target stays inside the package root. The link on disk is not changed. The directory symlink itself is not a member. Other directory symlinks stay as one symlink entry.
 
 Packing writes a temporary `.tar.gz` on disk. File bytes are read and compressed into that file; the archive is not buffered in memory. The sha256 and the multipart upload then read the file back. Archives over 80 MiB produce a warning. Packing stops once the gzip passes 256 MiB, before upload.
 

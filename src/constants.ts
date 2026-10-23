@@ -12,7 +12,14 @@ export const DEFAULT_REGISTRY_URL = "https://api.alchemy.new"
 export const DEPLOY_SITE = "https://alchemy.new"
 
 export const MANIFEST_FILENAME = "alchemy.new.jsonc"
-export const CLI_PATH = "node_modules/alchemy/bin/cli.js"
+
+/**
+ * Alchemy package directory. nub and pnpm often make this a directory symlink
+ * into an in-project store. The registry still requires `CLI_PATH` as its own
+ * archive member.
+ */
+export const ALCHEMY_PACKAGE_PATH = "node_modules/alchemy"
+export const CLI_PATH = `${ALCHEMY_PACKAGE_PATH}/bin/cli.js`
 
 /** Raw `alchemy.new.jsonc` upload cap. The registry returns `manifest_too_large` above this. */
 export const MAX_MANIFEST_BYTES = 256 * 1024
