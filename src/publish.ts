@@ -23,13 +23,13 @@ import {
   listArchive,
   memberMap,
   packFiles,
-  pathExists,
   sha256File,
   tempArchivePath,
 } from "./archive.ts"
 import {
   assertArchiveSize,
   assertNoRootManifest,
+  assertPresent,
   assertReadyArchive,
   assertSafeEntries,
 } from "./validate.ts"
@@ -320,11 +320,22 @@ async function prepareDirectory(options: PublishOptions, log: Logger): Promise<P
     throw new ActionError(`Refusing to pack forbidden files:\n${lines.join("\n")}`)
   }
   const files = filesForArchive(selection.files, manifestRelative)
+  const links = new Map<string, string>()
+  for (const file of files) {
+    const target = selection.links.get(file)
+    if (target !== undefined) links.set(file, target)
+  }
   const selected = new Set(files)
-  await assertPresent(directory, loaded.manifest.entrypoint, selected, "deployment entrypoint")
-  await assertPresent(directory, CLI_PATH, selected, CLI_PATH)
+  await assertPresent(
+    directory,
+    loaded.manifest.entrypoint,
+    selected,
+    links,
+    "deployment entrypoint",
+  )
+  await assertPresent(directory, CLI_PATH, selected, links, CLI_PATH)
   const archivePath = await tempArchivePath()
-  await packFiles(directory, files, archivePath)
+  await packFiles(directory, files, archivePath, { links })
   log.info(`Wrote ${archivePath}.`)
   const omitted = selection.files.filter((file) => omittedFromArchive(file, manifestRelative))
   return {
@@ -366,23 +377,6 @@ function relativeInside(directory: string, filePath: string): string | undefined
   const normalized = normalizeRelPath(rel)
   if (!normalized) return undefined
   return normalized
-}
-
-async function assertPresent(
-  root: string,
-  relativePath: string,
-  selected: Set<string>,
-  label: string,
-): Promise<void> {
-  if (selected.has(relativePath)) return
-  if (await pathExists(join(root, relativePath))) {
-    throw new ActionError(
-      `${label} (${relativePath}) is in the package directory but the include/exclude rules dropped it.`,
-    )
-  }
-  throw new ActionError(
-    `Missing ${label} at ${relativePath}. alchemy.new does not install dependencies or build the app.`,
-  )
 }
 
 export { normalizeRegistryUrl }

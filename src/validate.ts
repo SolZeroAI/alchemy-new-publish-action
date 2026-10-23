@@ -1,7 +1,9 @@
+import { join } from "node:path"
 import { CLI_PATH, MANIFEST_FILENAME, MAX_ARCHIVE_BYTES } from "./constants.ts"
 import { ActionError } from "./errors.ts"
 import type { Manifest } from "./manifest.ts"
-import { memberMap, type ArchiveEntry } from "./archive.ts"
+import { memberMap, pathExists, type ArchiveEntry } from "./archive.ts"
+import { symlinkProblem } from "./links.ts"
 import { hardRejectReason } from "./rules.ts"
 import { normalizeRelPath, resolvedSymlink, symlinkResolvesInside } from "./paths.ts"
 import { formatBytes } from "./bytes.ts"
@@ -60,17 +62,67 @@ export function assertNoRootManifest(entries: readonly ArchiveEntry[]): void {
   )
 }
 
+/**
+ * The registry requires these paths as archive members. A file member counts.
+ * A symlink member counts when its target stays inside the package and is not
+ * forbidden. A directory symlink does not create the child path.
+ */
 export function assertReadyArchive(entries: readonly ArchiveEntry[], manifest: Manifest): void {
   assertNoRootManifest(entries)
   const files = memberMap(entries)
-  if (!files.has(manifest.entrypoint)) {
+  assertArchiveMember(
+    files,
+    manifest.entrypoint,
+    `Archive is missing deployment entrypoint "${manifest.entrypoint}". alchemy.new runs that file and does not build the app.`,
+  )
+  assertArchiveMember(
+    files,
+    CLI_PATH,
+    `Archive is missing ${CLI_PATH}. Install production dependencies on linux/amd64 before packing. alchemy.new does not install them.`,
+  )
+}
+
+function assertArchiveMember(
+  files: Map<string, ArchiveEntry>,
+  path: string,
+  missing: string,
+): void {
+  const entry = files.get(path)
+  if (!entry) throw new ActionError(missing)
+  if (entry.type === "file") return
+  if (entry.type === "symlink" && entry.linkTarget) {
+    const problem = symlinkProblem(path, entry.linkTarget)
+    if (problem) throw new ActionError(problem)
+    return
+  }
+  throw new ActionError(missing)
+}
+
+/**
+ * `relativePath` has to be an archive member. An expanded `node_modules/alchemy`
+ * link counts when its relative target stays inside the package.
+ */
+export async function assertPresent(
+  root: string,
+  relativePath: string,
+  selected: ReadonlySet<string>,
+  links: ReadonlyMap<string, string>,
+  label: string,
+): Promise<void> {
+  if (selected.has(relativePath)) {
+    const target = links.get(relativePath)
+    if (target !== undefined) {
+      const problem = symlinkProblem(relativePath, target)
+      if (problem) throw new ActionError(problem)
+    }
+    return
+  }
+  if (await pathExists(join(root, relativePath))) {
     throw new ActionError(
-      `Archive is missing deployment entrypoint "${manifest.entrypoint}". alchemy.new runs that file and does not build the app.`,
+      `${label} (${relativePath}) is in the package directory but the include/exclude rules dropped it.`,
     )
   }
-  if (!files.has(CLI_PATH)) {
-    throw new ActionError(
-      `Archive is missing ${CLI_PATH}. Install production dependencies on linux/amd64 before packing. alchemy.new does not install them.`,
-    )
-  }
+  throw new ActionError(
+    `Missing ${label} at ${relativePath}. alchemy.new does not install dependencies or build the app.`,
+  )
 }

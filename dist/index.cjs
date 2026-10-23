@@ -2143,9 +2143,9 @@ var require_dispatcher_base = __commonJS({
       }
       close(callback) {
         if (callback === void 0) {
-          return new Promise((resolve2, reject) => {
+          return new Promise((resolve3, reject) => {
             this.close((err, data) => {
-              return err ? reject(err) : resolve2(data);
+              return err ? reject(err) : resolve3(data);
             });
           });
         }
@@ -2183,12 +2183,12 @@ var require_dispatcher_base = __commonJS({
           err = null;
         }
         if (callback === void 0) {
-          return new Promise((resolve2, reject) => {
+          return new Promise((resolve3, reject) => {
             this.destroy(err, (err2, data) => {
               return err2 ? (
                 /* istanbul ignore next: should never error */
                 reject(err2)
-              ) : resolve2(data);
+              ) : resolve3(data);
             });
           });
         }
@@ -4455,8 +4455,8 @@ var require_util2 = __commonJS({
     function createDeferredPromise() {
       let res;
       let rej;
-      const promise = new Promise((resolve2, reject) => {
-        res = resolve2;
+      const promise = new Promise((resolve3, reject) => {
+        res = resolve3;
         rej = reject;
       });
       return { promise, resolve: res, reject: rej };
@@ -6708,12 +6708,12 @@ upgrade: ${upgrade}\r
           cb();
         }
       }
-      const waitForDrain = () => new Promise((resolve2, reject) => {
+      const waitForDrain = () => new Promise((resolve3, reject) => {
         assert2(callback === null);
         if (socket[kError]) {
           reject(socket[kError]);
         } else {
-          callback = resolve2;
+          callback = resolve3;
         }
       });
       socket.on("close", onDrain).on("drain", onDrain);
@@ -7385,12 +7385,12 @@ var require_client_h2 = __commonJS({
           cb();
         }
       }
-      const waitForDrain = () => new Promise((resolve2, reject) => {
+      const waitForDrain = () => new Promise((resolve3, reject) => {
         assert2(callback === null);
         if (socket[kError]) {
           reject(socket[kError]);
         } else {
-          callback = resolve2;
+          callback = resolve3;
         }
       });
       h2stream.on("close", onDrain).on("drain", onDrain);
@@ -7868,16 +7868,16 @@ var require_client = __commonJS({
         return this[kNeedDrain] < 2;
       }
       async [kClose]() {
-        return new Promise((resolve2) => {
+        return new Promise((resolve3) => {
           if (this[kSize]) {
-            this[kClosedResolve] = resolve2;
+            this[kClosedResolve] = resolve3;
           } else {
-            resolve2(null);
+            resolve3(null);
           }
         });
       }
       async [kDestroy](err) {
-        return new Promise((resolve2) => {
+        return new Promise((resolve3) => {
           const requests = this[kQueue].splice(this[kPendingIdx]);
           for (let i = 0; i < requests.length; i++) {
             const request = requests[i];
@@ -7888,7 +7888,7 @@ var require_client = __commonJS({
               this[kClosedResolve]();
               this[kClosedResolve] = null;
             }
-            resolve2(null);
+            resolve3(null);
           };
           if (this[kHTTPContext]) {
             this[kHTTPContext].destroy(err, callback);
@@ -7939,7 +7939,7 @@ var require_client = __commonJS({
         });
       }
       try {
-        const socket = await new Promise((resolve2, reject) => {
+        const socket = await new Promise((resolve3, reject) => {
           client[kConnector]({
             host,
             hostname,
@@ -7951,7 +7951,7 @@ var require_client = __commonJS({
             if (err) {
               reject(err);
             } else {
-              resolve2(socket2);
+              resolve3(socket2);
             }
           });
         });
@@ -8287,8 +8287,8 @@ var require_pool_base = __commonJS({
         if (this[kQueue].isEmpty()) {
           await Promise.all(this[kClients].map((c) => c.close()));
         } else {
-          await new Promise((resolve2) => {
-            this[kClosedResolve] = resolve2;
+          await new Promise((resolve3) => {
+            this[kClosedResolve] = resolve3;
           });
         }
       }
@@ -9554,7 +9554,7 @@ var require_readable = __commonJS({
         if (this._readableState.closeEmitted) {
           return null;
         }
-        return await new Promise((resolve2, reject) => {
+        return await new Promise((resolve3, reject) => {
           if (this[kContentLength] > limit) {
             this.destroy(new AbortError());
           }
@@ -9567,7 +9567,7 @@ var require_readable = __commonJS({
             if (signal?.aborted) {
               reject(signal.reason ?? new AbortError());
             } else {
-              resolve2(null);
+              resolve3(null);
             }
           }).on("error", noop2).on("data", function(chunk) {
             limit -= chunk.length;
@@ -9586,7 +9586,7 @@ var require_readable = __commonJS({
     }
     async function consume(stream, type) {
       assert2(!stream[kConsume]);
-      return new Promise((resolve2, reject) => {
+      return new Promise((resolve3, reject) => {
         if (isUnusable(stream)) {
           const rState = stream._readableState;
           if (rState.destroyed && rState.closeEmitted === false) {
@@ -9603,7 +9603,7 @@ var require_readable = __commonJS({
             stream[kConsume] = {
               type,
               stream,
-              resolve: resolve2,
+              resolve: resolve3,
               reject,
               length: 0,
               body: []
@@ -9673,18 +9673,18 @@ var require_readable = __commonJS({
       return buffer;
     }
     function consumeEnd(consume2) {
-      const { type, body, resolve: resolve2, stream, length } = consume2;
+      const { type, body, resolve: resolve3, stream, length } = consume2;
       try {
         if (type === "text") {
-          resolve2(chunksDecode(body, length));
+          resolve3(chunksDecode(body, length));
         } else if (type === "json") {
-          resolve2(JSON.parse(chunksDecode(body, length)));
+          resolve3(JSON.parse(chunksDecode(body, length)));
         } else if (type === "arrayBuffer") {
-          resolve2(chunksConcat(body, length).buffer);
+          resolve3(chunksConcat(body, length).buffer);
         } else if (type === "blob") {
-          resolve2(new Blob(body, { type: stream[kContentType] }));
+          resolve3(new Blob(body, { type: stream[kContentType] }));
         } else if (type === "bytes") {
-          resolve2(chunksConcat(body, length));
+          resolve3(chunksConcat(body, length));
         }
         consumeFinish(consume2);
       } catch (err) {
@@ -9941,9 +9941,9 @@ var require_api_request = __commonJS({
     };
     function request(opts, callback) {
       if (callback === void 0) {
-        return new Promise((resolve2, reject) => {
+        return new Promise((resolve3, reject) => {
           request.call(this, opts, (err, data) => {
-            return err ? reject(err) : resolve2(data);
+            return err ? reject(err) : resolve3(data);
           });
         });
       }
@@ -10166,9 +10166,9 @@ var require_api_stream = __commonJS({
     };
     function stream(opts, factory, callback) {
       if (callback === void 0) {
-        return new Promise((resolve2, reject) => {
+        return new Promise((resolve3, reject) => {
           stream.call(this, opts, factory, (err, data) => {
-            return err ? reject(err) : resolve2(data);
+            return err ? reject(err) : resolve3(data);
           });
         });
       }
@@ -10453,9 +10453,9 @@ var require_api_upgrade = __commonJS({
     };
     function upgrade(opts, callback) {
       if (callback === void 0) {
-        return new Promise((resolve2, reject) => {
+        return new Promise((resolve3, reject) => {
           upgrade.call(this, opts, (err, data) => {
-            return err ? reject(err) : resolve2(data);
+            return err ? reject(err) : resolve3(data);
           });
         });
       }
@@ -10547,9 +10547,9 @@ var require_api_connect = __commonJS({
     };
     function connect(opts, callback) {
       if (callback === void 0) {
-        return new Promise((resolve2, reject) => {
+        return new Promise((resolve3, reject) => {
           connect.call(this, opts, (err, data) => {
-            return err ? reject(err) : resolve2(data);
+            return err ? reject(err) : resolve3(data);
           });
         });
       }
@@ -14411,7 +14411,7 @@ var require_fetch = __commonJS({
       function dispatch({ body }) {
         const url = requestCurrentURL(request);
         const agent = fetchParams.controller.dispatcher;
-        return new Promise((resolve2, reject) => agent.dispatch(
+        return new Promise((resolve3, reject) => agent.dispatch(
           {
             path: url.pathname + url.search,
             origin: url.origin,
@@ -14487,7 +14487,7 @@ var require_fetch = __commonJS({
                 }
               }
               const onError = this.onError.bind(this);
-              resolve2({
+              resolve3({
                 status,
                 statusText,
                 headersList,
@@ -14533,7 +14533,7 @@ var require_fetch = __commonJS({
               for (let i = 0; i < rawHeaders.length; i += 2) {
                 headersList.append(bufferToLowerCasedHeaderName(rawHeaders[i]), rawHeaders[i + 1].toString("latin1"), true);
               }
-              resolve2({
+              resolve3({
                 status,
                 statusText: STATUS_CODES[status],
                 headersList,
@@ -18264,8 +18264,8 @@ var require_util8 = __commonJS({
       return true;
     }
     function delay(ms2) {
-      return new Promise((resolve2) => {
-        setTimeout(resolve2, ms2).unref();
+      return new Promise((resolve3) => {
+        setTimeout(resolve3, ms2).unref();
       });
     }
     module2.exports = {
@@ -20081,11 +20081,11 @@ var tunnel = __toESM(require_tunnel2(), 1);
 var import_undici = __toESM(require_undici(), 1);
 var __awaiter = function(thisArg, _arguments, P2, generator) {
   function adopt(value) {
-    return value instanceof P2 ? value : new P2(function(resolve2) {
-      resolve2(value);
+    return value instanceof P2 ? value : new P2(function(resolve3) {
+      resolve3(value);
     });
   }
-  return new (P2 || (P2 = Promise))(function(resolve2, reject) {
+  return new (P2 || (P2 = Promise))(function(resolve3, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -20101,7 +20101,7 @@ var __awaiter = function(thisArg, _arguments, P2, generator) {
       }
     }
     function step(result) {
-      result.done ? resolve2(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     step((generator = generator.apply(thisArg, _arguments || [])).next());
   });
@@ -20174,26 +20174,26 @@ var HttpClientResponse = class {
   }
   readBody() {
     return __awaiter(this, void 0, void 0, function* () {
-      return new Promise((resolve2) => __awaiter(this, void 0, void 0, function* () {
+      return new Promise((resolve3) => __awaiter(this, void 0, void 0, function* () {
         let output = Buffer.alloc(0);
         this.message.on("data", (chunk) => {
           output = Buffer.concat([output, chunk]);
         });
         this.message.on("end", () => {
-          resolve2(output.toString());
+          resolve3(output.toString());
         });
       }));
     });
   }
   readBodyBuffer() {
     return __awaiter(this, void 0, void 0, function* () {
-      return new Promise((resolve2) => __awaiter(this, void 0, void 0, function* () {
+      return new Promise((resolve3) => __awaiter(this, void 0, void 0, function* () {
         const chunks = [];
         this.message.on("data", (chunk) => {
           chunks.push(chunk);
         });
         this.message.on("end", () => {
-          resolve2(Buffer.concat(chunks));
+          resolve3(Buffer.concat(chunks));
         });
       }));
     });
@@ -20396,14 +20396,14 @@ var HttpClient = class {
    */
   requestRaw(info2, data) {
     return __awaiter(this, void 0, void 0, function* () {
-      return new Promise((resolve2, reject) => {
+      return new Promise((resolve3, reject) => {
         function callbackForResult(err, res) {
           if (err) {
             reject(err);
           } else if (!res) {
             reject(new Error("Unknown error"));
           } else {
-            resolve2(res);
+            resolve3(res);
           }
         }
         this.requestRawWithCallback(info2, data, callbackForResult);
@@ -20647,12 +20647,12 @@ var HttpClient = class {
     return __awaiter(this, void 0, void 0, function* () {
       retryNumber = Math.min(ExponentialBackoffCeiling, retryNumber);
       const ms2 = ExponentialBackoffTimeSlice * Math.pow(2, retryNumber);
-      return new Promise((resolve2) => setTimeout(() => resolve2(), ms2));
+      return new Promise((resolve3) => setTimeout(() => resolve3(), ms2));
     });
   }
   _processResponse(res, options) {
     return __awaiter(this, void 0, void 0, function* () {
-      return new Promise((resolve2, reject) => __awaiter(this, void 0, void 0, function* () {
+      return new Promise((resolve3, reject) => __awaiter(this, void 0, void 0, function* () {
         const statusCode = res.message.statusCode || 0;
         const response = {
           statusCode,
@@ -20660,7 +20660,7 @@ var HttpClient = class {
           headers: {}
         };
         if (statusCode === HttpCodes.NotFound) {
-          resolve2(response);
+          resolve3(response);
         }
         function dateTimeDeserializer(key, value) {
           if (typeof value === "string") {
@@ -20699,7 +20699,7 @@ var HttpClient = class {
           err.result = response.result;
           reject(err);
         } else {
-          resolve2(response);
+          resolve3(response);
         }
       }));
     });
@@ -20710,11 +20710,11 @@ var lowercaseKeys = (obj) => Object.keys(obj).reduce((c, k2) => (c[k2.toLowerCas
 // node_modules/@actions/http-client/lib/auth.js
 var __awaiter2 = function(thisArg, _arguments, P2, generator) {
   function adopt(value) {
-    return value instanceof P2 ? value : new P2(function(resolve2) {
-      resolve2(value);
+    return value instanceof P2 ? value : new P2(function(resolve3) {
+      resolve3(value);
     });
   }
-  return new (P2 || (P2 = Promise))(function(resolve2, reject) {
+  return new (P2 || (P2 = Promise))(function(resolve3, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -20730,7 +20730,7 @@ var __awaiter2 = function(thisArg, _arguments, P2, generator) {
       }
     }
     function step(result) {
-      result.done ? resolve2(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     step((generator = generator.apply(thisArg, _arguments || [])).next());
   });
@@ -20761,11 +20761,11 @@ var BearerCredentialHandler = class {
 // node_modules/@actions/core/lib/oidc-utils.js
 var __awaiter3 = function(thisArg, _arguments, P2, generator) {
   function adopt(value) {
-    return value instanceof P2 ? value : new P2(function(resolve2) {
-      resolve2(value);
+    return value instanceof P2 ? value : new P2(function(resolve3) {
+      resolve3(value);
     });
   }
-  return new (P2 || (P2 = Promise))(function(resolve2, reject) {
+  return new (P2 || (P2 = Promise))(function(resolve3, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -20781,7 +20781,7 @@ var __awaiter3 = function(thisArg, _arguments, P2, generator) {
       }
     }
     function step(result) {
-      result.done ? resolve2(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     step((generator = generator.apply(thisArg, _arguments || [])).next());
   });
@@ -20850,11 +20850,11 @@ var import_os = require("os");
 var import_fs = require("fs");
 var __awaiter4 = function(thisArg, _arguments, P2, generator) {
   function adopt(value) {
-    return value instanceof P2 ? value : new P2(function(resolve2) {
-      resolve2(value);
+    return value instanceof P2 ? value : new P2(function(resolve3) {
+      resolve3(value);
     });
   }
-  return new (P2 || (P2 = Promise))(function(resolve2, reject) {
+  return new (P2 || (P2 = Promise))(function(resolve3, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -20870,7 +20870,7 @@ var __awaiter4 = function(thisArg, _arguments, P2, generator) {
       }
     }
     function step(result) {
-      result.done ? resolve2(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     step((generator = generator.apply(thisArg, _arguments || [])).next());
   });
@@ -21149,11 +21149,11 @@ var arch = import_os2.default.arch();
 // node_modules/@actions/core/lib/core.js
 var __awaiter5 = function(thisArg, _arguments, P2, generator) {
   function adopt(value) {
-    return value instanceof P2 ? value : new P2(function(resolve2) {
-      resolve2(value);
+    return value instanceof P2 ? value : new P2(function(resolve3) {
+      resolve3(value);
     });
   }
-  return new (P2 || (P2 = Promise))(function(resolve2, reject) {
+  return new (P2 || (P2 = Promise))(function(resolve3, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -21169,7 +21169,7 @@ var __awaiter5 = function(thisArg, _arguments, P2, generator) {
       }
     }
     function step(result) {
-      result.done ? resolve2(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     step((generator = generator.apply(thisArg, _arguments || [])).next());
   });
@@ -21254,7 +21254,8 @@ var OIDC_AUDIENCE = "https://alchemy.new/registry/publish";
 var DEFAULT_REGISTRY_URL = "https://api.alchemy.new";
 var DEPLOY_SITE = "https://alchemy.new";
 var MANIFEST_FILENAME = "alchemy.new.jsonc";
-var CLI_PATH = "node_modules/alchemy/bin/cli.js";
+var ALCHEMY_PACKAGE_PATH = "node_modules/alchemy";
+var CLI_PATH = `${ALCHEMY_PACKAGE_PATH}/bin/cli.js`;
 var MAX_MANIFEST_BYTES = 256 * 1024;
 var MIB = 1024 * 1024;
 var MAX_ARCHIVE_BYTES = 256 * MIB;
@@ -21328,7 +21329,7 @@ function redactingLogger(logger) {
 // src/publish.ts
 var import_node_crypto3 = require("node:crypto");
 var import_promises5 = require("node:fs/promises");
-var import_node_path12 = require("node:path");
+var import_node_path14 = require("node:path");
 
 // src/bytes.ts
 function formatBytes(bytes) {
@@ -21698,8 +21699,12 @@ function resolvePackage(input) {
 
 // src/select.ts
 var import_promises = require("node:fs/promises");
-var import_node_path = require("node:path");
+var import_node_path2 = require("node:path");
 var import_ignore = __toESM(require_ignore(), 1);
+
+// src/links.ts
+var import_node_path = require("node:path");
+var import_posix = require("node:path/posix");
 
 // src/rules.ts
 var ENV_ALLOW = /* @__PURE__ */ new Set([".env.example", ".env.sample"]);
@@ -21790,6 +21795,58 @@ function isDefaultExcluded(input) {
   return false;
 }
 
+// src/links.ts
+function relativeArchiveLink(fromFile, toFile) {
+  const slash = fromFile.lastIndexOf("/");
+  const fromDir = slash === -1 ? "." : fromFile.slice(0, slash);
+  const target = (0, import_posix.relative)(fromDir, toFile);
+  return target.length === 0 ? "." : target;
+}
+function isAbsoluteLinkTarget(target) {
+  return target.startsWith("/") || /^[A-Za-z]:[\\/]/.test(target) || (0, import_node_path.isAbsolute)(target);
+}
+function packageRelativeTarget(root, fromPath, target) {
+  if (!isAbsoluteLinkTarget(target)) return resolvedSymlink(fromPath, target);
+  if (process.platform !== "win32" && /^[A-Za-z]:[\\/]/.test(target)) return null;
+  const fromRoot = (0, import_node_path.relative)((0, import_node_path.resolve)(root), (0, import_node_path.resolve)(target));
+  if (fromRoot !== "" && (0, import_node_path.isAbsolute)(fromRoot)) return null;
+  return normalizeRelPath(fromRoot.split(import_node_path.sep).join("/"));
+}
+function symlinkArchiveTarget(root, relativePath, target) {
+  if (!isAbsoluteLinkTarget(target)) {
+    return symlinkResolvesInside(relativePath, target) ? target : null;
+  }
+  return absoluteSymlinkArchiveTarget(root, relativePath, target);
+}
+function absoluteSymlinkArchiveTarget(root, relativePath, target) {
+  const packageRelative = packageRelativeTarget(root, relativePath, target);
+  if (packageRelative === null) return null;
+  const slash = relativePath.lastIndexOf("/");
+  const dir = slash === -1 ? "." : relativePath.slice(0, slash);
+  const link = (0, import_posix.relative)(dir, packageRelative === "" ? "." : packageRelative);
+  const archiveTarget = link === "" ? "." : link;
+  if (!symlinkResolvesInside(relativePath, archiveTarget)) return null;
+  const resolved = resolvedSymlink(relativePath, archiveTarget);
+  if (packageRelative === "") {
+    if (resolved !== "") return null;
+  } else if (resolved !== packageRelative) {
+    return null;
+  }
+  return archiveTarget;
+}
+function symlinkProblem(fromPath, target) {
+  if (!symlinkResolvesInside(fromPath, target)) {
+    return `symlink ${fromPath} points outside the package root (${target})`;
+  }
+  const resolved = resolvedSymlink(fromPath, target);
+  if (!resolved) {
+    return `symlink ${fromPath} points outside the package root (${target})`;
+  }
+  const reason = hardRejectReason(resolved);
+  if (reason) return `symlink ${fromPath} points at a forbidden path (${resolved})`;
+  return void 0;
+}
+
 // src/select.ts
 function matcher(patterns, label) {
   if (patterns.length === 0) return { ignores: () => false };
@@ -21827,31 +21884,120 @@ function classifyPath(relativePath, options, includes, excludes) {
   return { kind: "include" };
 }
 var EXCLUDED_SAMPLE = 200;
+function fsErrorCode(error2) {
+  if (!(error2 instanceof Error) || !("code" in error2)) return "";
+  return String(error2.code);
+}
 async function selectFiles(root, options) {
   assertRelativePatterns("include", options.includes);
   assertRelativePatterns("exclude", options.excludes);
   const includes = options.includes.length > 0 ? matcher(options.includes, "include") : void 0;
   const excludes = matcher(options.excludes, "exclude");
   const files = [];
+  const links = /* @__PURE__ */ new Map();
   const excluded = [];
   let excludedCount = 0;
   const rejected = [];
+  const noteExcluded = (rel) => {
+    excludedCount += 1;
+    if (excluded.length < EXCLUDED_SAMPLE) excluded.push(rel);
+  };
+  const noteRejected = (path, reason) => {
+    rejected.push({ path, reason });
+  };
+  async function walkLinked(realDir, logicalDir) {
+    const entries = await (0, import_promises.readdir)((0, import_node_path2.join)(root, realDir), { withFileTypes: true });
+    for (const entry of entries) {
+      const logical = `${logicalDir}/${entry.name}`;
+      const real = `${realDir}/${entry.name}`;
+      const decision = classifyPath(logical, options, includes, excludes);
+      if (decision.kind === "exclude") {
+        noteExcluded(logical);
+        continue;
+      }
+      if (decision.kind === "reject") {
+        noteRejected(logical, decision.reason);
+        continue;
+      }
+      if (entry.isSymbolicLink()) {
+        const target = await (0, import_promises.readlink)((0, import_node_path2.join)(root, real));
+        const resolved = packageRelativeTarget(root, real, target);
+        if (resolved === null) {
+          noteRejected(logical, `symlink ${logical} points outside the package root (${target})`);
+          continue;
+        }
+        const reason = hardRejectReason(resolved);
+        if (reason) {
+          noteRejected(logical, `symlink ${logical} points at a forbidden path (${resolved})`);
+          continue;
+        }
+        recordLink(logical, resolved);
+        continue;
+      }
+      if (entry.isDirectory()) {
+        await walkLinked(real, logical);
+        continue;
+      }
+      if (entry.isFile()) {
+        recordLink(logical, real);
+        continue;
+      }
+      noteExcluded(logical);
+    }
+  }
+  function recordLink(logical, real) {
+    const target = relativeArchiveLink(logical, real);
+    const problem = symlinkProblem(logical, target);
+    if (problem) {
+      noteRejected(logical, problem);
+      return;
+    }
+    files.push(logical);
+    links.set(logical, target);
+  }
+  async function expandAlchemyLink(rel) {
+    const target = await (0, import_promises.readlink)((0, import_node_path2.join)(root, rel));
+    const resolved = packageRelativeTarget(root, rel, target);
+    if (resolved === null) {
+      noteRejected(rel, `symlink ${rel} points outside the package root (${target})`);
+      return true;
+    }
+    if (resolved === rel || resolved.startsWith(`${rel}/`)) {
+      noteRejected(rel, `symlink ${rel} points at itself (${target})`);
+      return true;
+    }
+    let info2;
+    try {
+      info2 = await (0, import_promises.stat)((0, import_node_path2.join)(root, resolved));
+    } catch (error2) {
+      const code = fsErrorCode(error2);
+      if (code === "ENOENT") return false;
+      if (code === "ELOOP") {
+        noteRejected(rel, `symlink ${rel} points at itself (${target})`);
+        return true;
+      }
+      throw error2;
+    }
+    if (!info2.isDirectory()) return false;
+    await walkLinked(resolved, rel);
+    return true;
+  }
   async function walk(relDir) {
-    const absolute = relDir === "" ? root : (0, import_node_path.join)(root, relDir);
+    const absolute = relDir === "" ? root : (0, import_node_path2.join)(root, relDir);
     const entries = await (0, import_promises.readdir)(absolute, { withFileTypes: true });
     for (const entry of entries) {
       const rel = relDir === "" ? entry.name : `${relDir}/${entry.name}`;
       const decision = classifyPath(rel, options, includes, excludes);
       if (decision.kind === "exclude") {
-        excludedCount += 1;
-        if (excluded.length < EXCLUDED_SAMPLE) excluded.push(rel);
+        noteExcluded(rel);
         continue;
       }
       if (decision.kind === "reject") {
-        rejected.push({ path: rel, reason: decision.reason });
+        noteRejected(rel, decision.reason);
         continue;
       }
       if (entry.isSymbolicLink()) {
+        if (rel === ALCHEMY_PACKAGE_PATH && await expandAlchemyLink(rel)) continue;
         files.push(rel);
         continue;
       }
@@ -21863,13 +22009,12 @@ async function selectFiles(root, options) {
         files.push(rel);
         continue;
       }
-      excludedCount += 1;
-      if (excluded.length < EXCLUDED_SAMPLE) excluded.push(rel);
+      noteExcluded(rel);
     }
   }
   await walk("");
   files.sort();
-  return { files, excluded, excludedCount, rejected };
+  return { files, links, excluded, excludedCount, rejected };
 }
 
 // src/archive.ts
@@ -21877,8 +22022,7 @@ var import_node_crypto2 = require("node:crypto");
 var import_node_fs7 = require("node:fs");
 var import_promises3 = require("node:fs/promises");
 var import_node_os = require("node:os");
-var import_node_path11 = require("node:path");
-var import_posix = require("node:path/posix");
+var import_node_path12 = require("node:path");
 
 // node_modules/minizlib/dist/esm/index.js
 var import_assert = __toESM(require("assert"), 1);
@@ -22613,10 +22757,10 @@ var Minipass = class extends import_node_events.EventEmitter {
    * Return a void Promise that resolves once the stream ends.
    */
   async promise() {
-    return new Promise((resolve2, reject) => {
+    return new Promise((resolve3, reject) => {
       this.on(DESTROYED, () => reject(new Error("stream destroyed")));
       this.on("error", (er2) => reject(er2));
-      this.on("end", () => resolve2());
+      this.on("end", () => resolve3());
     });
   }
   /**
@@ -22640,7 +22784,7 @@ var Minipass = class extends import_node_events.EventEmitter {
         return Promise.resolve({ done: false, value: res });
       if (this[EOF])
         return stop();
-      let resolve2;
+      let resolve3;
       let reject;
       const onerr = (er2) => {
         this.off("data", ondata);
@@ -22654,19 +22798,19 @@ var Minipass = class extends import_node_events.EventEmitter {
         this.off("end", onend);
         this.off(DESTROYED, ondestroy);
         this.pause();
-        resolve2({ value, done: !!this[EOF] });
+        resolve3({ value, done: !!this[EOF] });
       };
       const onend = () => {
         this.off("error", onerr);
         this.off("data", ondata);
         this.off(DESTROYED, ondestroy);
         stop();
-        resolve2({ done: true, value: void 0 });
+        resolve3({ done: true, value: void 0 });
       };
       const ondestroy = () => onerr(new Error("stream destroyed"));
       return new Promise((res2, rej) => {
         reject = rej;
-        resolve2 = res2;
+        resolve3 = res2;
         this.once(DESTROYED, ondestroy);
         this.once("error", onerr);
         this.once("end", onend);
@@ -23115,7 +23259,7 @@ var import_fs2 = __toESM(require("fs"), 1);
 var import_node_events2 = require("node:events");
 var import_node_stream2 = __toESM(require("node:stream"), 1);
 var import_node_string_decoder2 = require("node:string_decoder");
-var import_node_path2 = __toESM(require("node:path"), 1);
+var import_node_path3 = __toESM(require("node:path"), 1);
 var import_node_fs = __toESM(require("node:fs"), 1);
 var import_path = require("path");
 var import_events2 = require("events");
@@ -23123,27 +23267,27 @@ var import_assert2 = __toESM(require("assert"), 1);
 var import_buffer2 = require("buffer");
 var Ps = __toESM(require("zlib"), 1);
 var import_zlib2 = __toESM(require("zlib"), 1);
-var import_node_path3 = require("node:path");
 var import_node_path4 = require("node:path");
+var import_node_path5 = require("node:path");
 var import_fs3 = __toESM(require("fs"), 1);
 var import_fs4 = __toESM(require("fs"), 1);
 var import_path2 = __toESM(require("path"), 1);
-var import_node_path5 = require("node:path");
+var import_node_path6 = require("node:path");
 var import_path3 = __toESM(require("path"), 1);
 var import_node_fs2 = __toESM(require("node:fs"), 1);
 var import_node_assert = __toESM(require("node:assert"), 1);
 var import_node_crypto = require("node:crypto");
 var import_node_fs3 = __toESM(require("node:fs"), 1);
-var import_node_path6 = __toESM(require("node:path"), 1);
+var import_node_path7 = __toESM(require("node:path"), 1);
 var import_fs5 = __toESM(require("fs"), 1);
 var import_node_fs4 = __toESM(require("node:fs"), 1);
-var import_node_path7 = __toESM(require("node:path"), 1);
+var import_node_path8 = __toESM(require("node:path"), 1);
 var import_node_fs5 = __toESM(require("node:fs"), 1);
 var import_promises2 = __toESM(require("node:fs/promises"), 1);
-var import_node_path8 = __toESM(require("node:path"), 1);
-var import_node_path9 = require("node:path");
+var import_node_path9 = __toESM(require("node:path"), 1);
+var import_node_path10 = require("node:path");
 var import_node_fs6 = __toESM(require("node:fs"), 1);
-var import_node_path10 = __toESM(require("node:path"), 1);
+var import_node_path11 = __toESM(require("node:path"), 1);
 var zr = Object.defineProperty;
 var Ur = (s3, t) => {
   for (var e in t) zr(s3, e, { get: t[e], enumerable: true });
@@ -24037,12 +24181,12 @@ var F = class {
   }
 };
 var mn = (s3, t) => {
-  let i = s3, r = "", n, o = import_node_path3.posix.parse(s3).root || ".";
+  let i = s3, r = "", n, o = import_node_path4.posix.parse(s3).root || ".";
   if (Buffer.byteLength(i) < 100) n = [i, r, false];
   else {
-    r = import_node_path3.posix.dirname(i), i = import_node_path3.posix.basename(i);
+    r = import_node_path4.posix.dirname(i), i = import_node_path4.posix.basename(i);
     do
-      Buffer.byteLength(i) <= 100 && Buffer.byteLength(r) <= t ? n = [i, r, false] : Buffer.byteLength(i) > 100 && Buffer.byteLength(r) <= t ? n = [i.slice(0, 99), r, true] : (i = import_node_path3.posix.join(import_node_path3.posix.basename(r), i), r = import_node_path3.posix.dirname(r));
+      Buffer.byteLength(i) <= 100 && Buffer.byteLength(r) <= t ? n = [i, r, false] : Buffer.byteLength(i) > 100 && Buffer.byteLength(r) <= t ? n = [i.slice(0, 99), r, true] : (i = import_node_path4.posix.join(import_node_path4.posix.basename(r), i), r = import_node_path4.posix.dirname(r));
     while (r !== o && n === void 0);
     n || (n = [s3.slice(0, 99), "", true]);
   }
@@ -24088,7 +24232,7 @@ var ft = class s {
     if (t === "") return Buffer.allocUnsafe(0);
     let e = Buffer.byteLength(t), i = 512 * Math.ceil(1 + e / 512), r = Buffer.allocUnsafe(i);
     for (let n = 0; n < 512; n++) r[n] = 0;
-    new F({ path: ("PaxHeader/" + (0, import_node_path4.basename)(this.path ?? "")).slice(0, 99), mode: this.mode || 420, uid: this.uid, gid: this.gid, size: e, mtime: this.mtime, type: this.global ? "GlobalExtendedHeader" : "ExtendedHeader", linkpath: "", uname: this.uname || "", gname: this.gname || "", devmaj: 0, devmin: 0, atime: this.atime, ctime: this.ctime }).encode(r), r.write(t, 512, e, "utf8");
+    new F({ path: ("PaxHeader/" + (0, import_node_path5.basename)(this.path ?? "")).slice(0, 99), mode: this.mode || 420, uid: this.uid, gid: this.gid, size: e, mtime: this.mtime, type: this.global ? "GlobalExtendedHeader" : "ExtendedHeader", linkpath: "", uname: this.uname || "", gname: this.gname || "", devmaj: 0, devmin: 0, atime: this.atime, ctime: this.ctime }).encode(r), r.write(t, 512, e, "utf8");
     for (let n = e + 512; n < r.length; n++) r[n] = 0;
     return r;
   }
@@ -24551,7 +24695,7 @@ var Ct = K(Mn, Bn, (s3) => new rt(s3), (s3) => new rt(s3), (s3, t) => {
   t?.length && Qi(s3, t), s3.noResume || vn(s3);
 });
 var Ji = (s3, t, e) => (s3 &= 4095, e && (s3 = (s3 | 384) & -19), t && (s3 & 256 && (s3 |= 64), s3 & 32 && (s3 |= 8), s3 & 4 && (s3 |= 1)), s3);
-var { isAbsolute: zn, parse: qs } = import_node_path5.win32;
+var { isAbsolute: zn, parse: qs } = import_node_path6.win32;
 var ce = (s3) => {
   let t = "", e = qs(s3);
   for (; zn(s3) || e.root; ) {
@@ -25260,11 +25404,11 @@ var $n = (s3, t) => {
 };
 var fr = (s3, t) => {
   t.forEach((e) => {
-    e.charAt(0) === "@" ? Ct({ file: import_node_path2.default.resolve(s3.cwd, e.slice(1)), sync: true, noResume: true, onReadEntry: (i) => s3.add(i) }) : s3.add(e);
+    e.charAt(0) === "@" ? Ct({ file: import_node_path3.default.resolve(s3.cwd, e.slice(1)), sync: true, noResume: true, onReadEntry: (i) => s3.add(i) }) : s3.add(e);
   }), s3.end();
 };
 var dr = async (s3, t) => {
-  for (let e of t) e.charAt(0) === "@" ? await Ct({ file: import_node_path2.default.resolve(String(s3.cwd), e.slice(1)), noResume: true, onReadEntry: (i) => {
+  for (let e of t) e.charAt(0) === "@" ? await Ct({ file: import_node_path3.default.resolve(String(s3.cwd), e.slice(1)), noResume: true, onReadEntry: (i) => {
     s3.add(i);
   } }) : s3.add(e);
   s3.end();
@@ -25302,13 +25446,13 @@ var Ei = (s3, t, e, i) => {
   });
 };
 var io = (s3, t, e, i, r) => {
-  if (t.isDirectory()) Es(import_node_path7.default.resolve(s3, t.name), e, i, (n) => {
+  if (t.isDirectory()) Es(import_node_path8.default.resolve(s3, t.name), e, i, (n) => {
     if (n) return r(n);
-    let o = import_node_path7.default.resolve(s3, t.name);
+    let o = import_node_path8.default.resolve(s3, t.name);
     Ei(o, e, i, r);
   });
   else {
-    let n = import_node_path7.default.resolve(s3, t.name);
+    let n = import_node_path8.default.resolve(s3, t.name);
     Ei(n, e, i, r);
   }
 };
@@ -25329,7 +25473,7 @@ var Es = (s3, t, e, i) => {
   });
 };
 var so = (s3, t, e, i) => {
-  t.isDirectory() && ws(import_node_path7.default.resolve(s3, t.name), e, i), ps(import_node_path7.default.resolve(s3, t.name), e, i);
+  t.isDirectory() && ws(import_node_path8.default.resolve(s3, t.name), e, i), ps(import_node_path8.default.resolve(s3, t.name), e, i);
 };
 var ws = (s3, t, e) => {
   let i;
@@ -25379,12 +25523,12 @@ var gr = (s3, t, e) => {
   };
   if (s3 === d) return no(s3, y);
   if (l) return import_promises2.default.mkdir(s3, { mode: r, recursive: true }).then((E) => y(null, E ?? void 0), y);
-  let D = f(import_node_path8.default.relative(d, s3)).split("/");
+  let D = f(import_node_path9.default.relative(d, s3)).split("/");
   Ss(d, D, r, c, d, void 0, y);
 };
 var Ss = (s3, t, e, i, r, n, o) => {
   if (t.length === 0) return o(null, n);
-  let h = t.shift(), a = f(import_node_path8.default.resolve(s3 + "/" + h));
+  let h = t.shift(), a = f(import_node_path9.default.resolve(s3 + "/" + h));
   import_node_fs5.default.mkdir(a, e, br(a, t, e, i, r, n, o));
 };
 var br = (s3, t, e, i, r, n, o) => (h) => {
@@ -25418,9 +25562,9 @@ var _r = (s3, t) => {
   };
   if (s3 === c) return oo(c), d();
   if (a) return d(import_node_fs5.default.mkdirSync(s3, { mode: i, recursive: true }) ?? void 0);
-  let T = f(import_node_path8.default.relative(c, s3)).split("/"), D;
+  let T = f(import_node_path9.default.relative(c, s3)).split("/"), D;
   for (let E = T.shift(), x = c; E && (x += "/" + E); E = T.shift()) {
-    x = f(import_node_path8.default.resolve(x));
+    x = f(import_node_path9.default.resolve(x));
     try {
       import_node_fs5.default.mkdirSync(x, i), D = D || x;
     } catch {
@@ -25449,14 +25593,14 @@ var ho = process.env.TESTING_TAR_FAKE_PLATFORM || process.platform;
 var ao = ho === "win32";
 var lo = (s3) => s3.split("/").slice(0, -1).reduce((e, i) => {
   let r = e.at(-1);
-  return r !== void 0 && (i = (0, import_node_path9.join)(r, i)), e.push(i || "/"), e;
+  return r !== void 0 && (i = (0, import_node_path10.join)(r, i)), e.push(i || "/"), e;
 }, []);
 var yi = class {
   #t = /* @__PURE__ */ new Map();
   #i = /* @__PURE__ */ new Map();
   #s = /* @__PURE__ */ new Set();
   reserve(t, e) {
-    t = ao ? ["win32 parallelization disabled"] : t.map((r) => mt((0, import_node_path9.join)(Tr(r))));
+    t = ao ? ["win32 parallelization disabled"] : t.map((r) => mt((0, import_node_path10.join)(Tr(r))));
     let i = new Set(t.map((r) => lo(r)).reduce((r, n) => r.concat(n)));
     this.#i.set(e, { dirs: i, paths: t });
     for (let r of t) {
@@ -25596,7 +25740,7 @@ var Xt = class extends rt {
       if (t.preserveOwner) throw new TypeError("cannot preserve owner in archive and also set owner explicitly");
       this.uid = t.uid, this.gid = t.gid, this.setOwner = true;
     } else this.uid = void 0, this.gid = void 0, this.setOwner = false;
-    this.preserveOwner = t.preserveOwner === void 0 && typeof t.uid != "number" ? process.getuid?.() === 0 : !!t.preserveOwner, this.processUid = (this.preserveOwner || this.setOwner) && process.getuid ? process.getuid() : void 0, this.processGid = (this.preserveOwner || this.setOwner) && process.getgid ? process.getgid() : void 0, this.maxDepth = typeof t.maxDepth == "number" ? t.maxDepth : uo, this.forceChown = t.forceChown === true, this.win32 = !!t.win32 || Te, this.newer = !!t.newer, this.keep = !!t.keep, this.noMtime = !!t.noMtime, this.preservePaths = !!t.preservePaths, this.unlink = !!t.unlink, this.cwd = f(import_node_path6.default.resolve(t.cwd || process.cwd())), this.strip = Number(t.strip) || 0, this.processUmask = this.chmod ? typeof t.processUmask == "number" ? t.processUmask : Lr() : 0, this.umask = typeof t.umask == "number" ? t.umask : this.processUmask, this.dmode = t.dmode || 511 & ~this.umask, this.fmode = t.fmode || 438 & ~this.umask, this.on("entry", (e) => this[Dr](e));
+    this.preserveOwner = t.preserveOwner === void 0 && typeof t.uid != "number" ? process.getuid?.() === 0 : !!t.preserveOwner, this.processUid = (this.preserveOwner || this.setOwner) && process.getuid ? process.getuid() : void 0, this.processGid = (this.preserveOwner || this.setOwner) && process.getgid ? process.getgid() : void 0, this.maxDepth = typeof t.maxDepth == "number" ? t.maxDepth : uo, this.forceChown = t.forceChown === true, this.win32 = !!t.win32 || Te, this.newer = !!t.newer, this.keep = !!t.keep, this.noMtime = !!t.noMtime, this.preservePaths = !!t.preservePaths, this.unlink = !!t.unlink, this.cwd = f(import_node_path7.default.resolve(t.cwd || process.cwd())), this.strip = Number(t.strip) || 0, this.processUmask = this.chmod ? typeof t.processUmask == "number" ? t.processUmask : Lr() : 0, this.umask = typeof t.umask == "number" ? t.umask : this.processUmask, this.dmode = t.dmode || 511 & ~this.umask, this.fmode = t.fmode || 438 & ~this.umask, this.on("entry", (e) => this[Dr](e));
   }
   warn(t, e, i = {}) {
     return (t === "TAR_BAD_ARCHIVE" || t === "TAR_ABORT") && (i.recoverable = false), super.warn(t, e, i);
@@ -25610,7 +25754,7 @@ var Xt = class extends rt {
     let [n, o] = ce(i), h = o.replaceAll(/\\/g, "/").split("/");
     if (h.includes("..") || Te && /^[a-z]:\.\.$/i.test(h[0] ?? "")) {
       if (e === "path" || r === "Link") return this.warn("TAR_ENTRY_ERROR", `${e} contains '..'`, { entry: t, [e]: i }), false;
-      let a = import_node_path6.default.posix.dirname(t.path), l = import_node_path6.default.posix.normalize(import_node_path6.default.posix.join(a, h.join("/")));
+      let a = import_node_path7.default.posix.dirname(t.path), l = import_node_path7.default.posix.normalize(import_node_path7.default.posix.join(a, h.join("/")));
       if (l.startsWith("../") || l === "..") return this.warn("TAR_ENTRY_ERROR", `${e} escapes extraction directory`, { entry: t, [e]: i }), false;
     }
     return n && (t[e] = String(o), this.warn("TAR_ENTRY_INFO", `stripping ${n} from absolute ${e}`, { entry: t, [e]: i })), true;
@@ -25628,12 +25772,12 @@ var Xt = class extends rt {
     }
     if (isFinite(this.maxDepth) && i.length > this.maxDepth) return this.warn("TAR_ENTRY_ERROR", "path excessively deep", { entry: t, path: e, depth: i.length, maxDepth: this.maxDepth }), false;
     if (!this[Rs](t, "path") || !this[Rs](t, "linkpath")) return false;
-    if (t.absolute = import_node_path6.default.isAbsolute(t.path) ? f(import_node_path6.default.resolve(t.path)) : f(import_node_path6.default.resolve(this.cwd, t.path)), !this.preservePaths && typeof t.absolute == "string" && t.absolute.indexOf(this.cwd + "/") !== 0 && t.absolute !== this.cwd) return this.warn("TAR_ENTRY_ERROR", "path escaped extraction target", { entry: t, path: f(t.path), resolvedPath: t.absolute, cwd: this.cwd }), false;
+    if (t.absolute = import_node_path7.default.isAbsolute(t.path) ? f(import_node_path7.default.resolve(t.path)) : f(import_node_path7.default.resolve(this.cwd, t.path)), !this.preservePaths && typeof t.absolute == "string" && t.absolute.indexOf(this.cwd + "/") !== 0 && t.absolute !== this.cwd) return this.warn("TAR_ENTRY_ERROR", "path escaped extraction target", { entry: t, path: f(t.path), resolvedPath: t.absolute, cwd: this.cwd }), false;
     if (t.absolute === this.cwd && t.type !== "Directory" && t.type !== "GNUDumpDir") return false;
     if (this.win32) {
-      let { root: r } = import_node_path6.default.win32.parse(String(t.absolute));
+      let { root: r } = import_node_path7.default.win32.parse(String(t.absolute));
       t.absolute = r + ts(String(t.absolute).slice(r.length));
-      let { root: n } = import_node_path6.default.win32.parse(t.path);
+      let { root: n } = import_node_path7.default.win32.parse(t.path);
       t.path = n + ts(t.path.slice(n.length));
     }
     return true;
@@ -25721,13 +25865,13 @@ var Xt = class extends rt {
     t.unsupported = true, this.warn("TAR_ENTRY_UNSUPPORTED", `unsupported entry type: ${t.type}`, { entry: t }), t.resume();
   }
   [Ar](t, e) {
-    let i = f(import_node_path6.default.relative(this.cwd, import_node_path6.default.resolve(import_node_path6.default.dirname(String(t.absolute)), String(t.linkpath)))).split("/");
+    let i = f(import_node_path7.default.relative(this.cwd, import_node_path7.default.resolve(import_node_path7.default.dirname(String(t.absolute)), String(t.linkpath)))).split("/");
     this[Re](t, this.cwd, i, () => this[gi](t, String(t.linkpath), "symlink", e), (r) => {
       this[O](r, t), e();
     });
   }
   [Ir](t, e) {
-    let i = f(import_node_path6.default.resolve(this.cwd, String(t.linkpath))), r = f(String(t.linkpath)).split("/");
+    let i = f(import_node_path7.default.resolve(this.cwd, String(t.linkpath))), r = f(String(t.linkpath)).split("/");
     this[Re](t, this.cwd, r, () => this[gi](t, i, "link", e), (n) => {
       this[O](n, t), e();
     });
@@ -25735,10 +25879,10 @@ var Xt = class extends rt {
   [Re](t, e, i, r, n) {
     let o = i.shift();
     if (this.preservePaths || o === void 0) return r();
-    let h = import_node_path6.default.resolve(e, o);
+    let h = import_node_path7.default.resolve(e, o);
     import_node_fs3.default.lstat(h, (a, l) => {
       if (a) return r();
-      if (l?.isSymbolicLink()) return n(new St(h, import_node_path6.default.resolve(h, i.join("/"))));
+      if (l?.isSymbolicLink()) return n(new St(h, import_node_path7.default.resolve(h, i.join("/"))));
       this[Re](t, h, i, r, n);
     });
   }
@@ -25772,7 +25916,7 @@ var Xt = class extends rt {
       });
     }, n = () => {
       if (t.absolute !== this.cwd) {
-        let h = f(import_node_path6.default.dirname(String(t.absolute)));
+        let h = f(import_node_path7.default.dirname(String(t.absolute)));
         if (h !== this.cwd) return this[yt](h, this.dmode, (a) => {
           if (a) {
             this[O](a, t), i();
@@ -25847,7 +25991,7 @@ var xe = class extends Xt {
       this[Oe] = true;
     }
     if (t.absolute !== this.cwd) {
-      let n = f(import_node_path6.default.dirname(String(t.absolute)));
+      let n = f(import_node_path7.default.dirname(String(t.absolute)));
       if (n !== this.cwd) {
         let o = this[yt](n, this.dmode);
         if (o) return this[O](o, t);
@@ -25947,10 +26091,10 @@ var xe = class extends Xt {
     if (this.preservePaths || i.length === 0) return r();
     let o = e;
     for (let h of i) {
-      o = import_node_path6.default.resolve(o, h);
+      o = import_node_path7.default.resolve(o, h);
       let [a, l] = ye(() => import_node_fs3.default.lstatSync(o));
       if (a) return r();
-      if (l.isSymbolicLink()) return n(new St(o, import_node_path6.default.resolve(e, i.join("/"))));
+      if (l.isSymbolicLink()) return n(new St(o, import_node_path7.default.resolve(e, i.join("/"))));
     }
     r();
   }
@@ -26054,11 +26198,11 @@ var go = (s3, t) => {
 };
 var bo = (s3, t) => {
   t.forEach((e) => {
-    e.charAt(0) === "@" ? Ct({ file: import_node_path10.default.resolve(s3.cwd, e.slice(1)), sync: true, noResume: true, onReadEntry: (i) => s3.add(i) }) : s3.add(e);
+    e.charAt(0) === "@" ? Ct({ file: import_node_path11.default.resolve(s3.cwd, e.slice(1)), sync: true, noResume: true, onReadEntry: (i) => s3.add(i) }) : s3.add(e);
   }), s3.end();
 };
 var _o = async (s3, t) => {
-  for (let e of t) e.charAt(0) === "@" ? await Ct({ file: import_node_path10.default.resolve(String(s3.cwd), e.slice(1)), noResume: true, onReadEntry: (i) => s3.add(i) }) : s3.add(e);
+  for (let e of t) e.charAt(0) === "@" ? await Ct({ file: import_node_path11.default.resolve(String(s3.cwd), e.slice(1)), noResume: true, onReadEntry: (i) => s3.add(i) }) : s3.add(e);
   s3.end();
 };
 var vt = K(yo, go, () => {
@@ -26108,13 +26252,13 @@ async function fileSize(filePath) {
 }
 async function sha256File(filePath) {
   const hash = (0, import_node_crypto2.createHash)("sha256");
-  await new Promise((resolve2, reject) => {
+  await new Promise((resolve3, reject) => {
     const stream = (0, import_node_fs7.createReadStream)(filePath);
     stream.on("data", (chunk) => {
       hash.update(chunk);
     });
     stream.on("error", reject);
-    stream.on("end", () => resolve2());
+    stream.on("end", () => resolve3());
   });
   return hash.digest("hex");
 }
@@ -26142,7 +26286,16 @@ async function packFiles(root, files, destination, options = {}) {
     throw new ActionError("Nothing to pack. The include and exclude rules removed every file.");
   }
   const maxBytes = options.maxBytes ?? MAX_ARCHIVE_BYTES;
-  await (0, import_promises3.mkdir)((0, import_node_path11.dirname)(destination), { recursive: true });
+  await (0, import_promises3.mkdir)((0, import_node_path12.dirname)(destination), { recursive: true });
+  let scratch;
+  let scratchCount = 0;
+  const materializeLink = async (linkTarget) => {
+    scratch ??= await (0, import_promises3.mkdtemp)((0, import_node_path12.join)((0, import_node_path12.dirname)(destination), "alchemy-links-"));
+    const source = (0, import_node_path12.join)(scratch, String(scratchCount));
+    scratchCount += 1;
+    await (0, import_promises3.symlink)(linkTarget, source);
+    return source;
+  };
   const gzip = new Gzip({ portable: true });
   const output = (0, import_node_fs7.createWriteStream)(destination);
   const linkCache = /* @__PURE__ */ new Map();
@@ -26180,36 +26333,58 @@ async function packFiles(root, files, destination, options = {}) {
   });
   gzip.on("error", (error2) => fail(error2));
   output.on("error", (error2) => fail(error2));
-  const closed = new Promise((resolve2) => {
-    output.once("close", () => resolve2());
+  const closed = new Promise((resolve3) => {
+    output.once("close", () => resolve3());
   });
   try {
-    for (const relativePath of files) {
+    try {
+      for (const relativePath of files) {
+        if (failed) throw failed;
+        const linkTarget = options.links?.get(relativePath);
+        if (linkTarget !== void 0) {
+          const problem = symlinkProblem(relativePath, linkTarget);
+          if (problem) throw new ActionError(problem);
+          const source = await materializeLink(linkTarget);
+          await writePackedEntry(
+            gzip,
+            root,
+            relativePath,
+            linkCache,
+            statCache,
+            () => failed,
+            source,
+            linkTarget
+          );
+          continue;
+        }
+        const archiveLink = await assertSymlinkAllowed(root, relativePath);
+        await writePackedEntry(
+          gzip,
+          root,
+          relativePath,
+          linkCache,
+          statCache,
+          () => failed,
+          (0, import_node_path12.join)(root, relativePath),
+          archiveLink
+        );
+      }
       if (failed) throw failed;
-      const archiveLink = await assertSymlinkAllowed(root, relativePath);
-      await writePackedEntry(
-        gzip,
-        root,
-        relativePath,
-        linkCache,
-        statCache,
-        () => failed,
-        archiveLink
-      );
+      gzip.end(TAR_EOF);
+      await closed;
+      if (failed) throw failed;
+    } catch (error2) {
+      const cause = fail(error2);
+      await closed;
+      await (0, import_promises3.rm)(destination, { force: true });
+      throw cause;
     }
-    if (failed) throw failed;
-    gzip.end(TAR_EOF);
-    await closed;
-    if (failed) throw failed;
-  } catch (error2) {
-    const cause = fail(error2);
-    await closed;
-    await (0, import_promises3.rm)(destination, { force: true });
-    throw cause;
+  } finally {
+    if (scratch) await (0, import_promises3.rm)(scratch, { recursive: true, force: true });
   }
 }
 async function assertSymlinkAllowed(root, relativePath) {
-  const absolute = (0, import_node_path11.join)(root, relativePath);
+  const absolute = (0, import_node_path12.join)(root, relativePath);
   let info2;
   try {
     info2 = await (0, import_promises3.lstat)(absolute);
@@ -26234,36 +26409,8 @@ async function assertSymlinkAllowed(root, relativePath) {
   }
   return archiveTarget;
 }
-function isAbsoluteLinkTarget(target) {
-  return target.startsWith("/") || /^[A-Za-z]:[\\/]/.test(target) || (0, import_node_path11.isAbsolute)(target);
-}
-function symlinkArchiveTarget(root, relativePath, target) {
-  if (!isAbsoluteLinkTarget(target)) {
-    return symlinkResolvesInside(relativePath, target) ? target : null;
-  }
-  return absoluteSymlinkArchiveTarget(root, relativePath, target);
-}
-function absoluteSymlinkArchiveTarget(root, relativePath, target) {
-  if (process.platform !== "win32" && /^[A-Za-z]:[\\/]/.test(target)) return null;
-  const fromRoot = (0, import_node_path11.relative)((0, import_node_path11.resolve)(root), (0, import_node_path11.resolve)(target));
-  if (fromRoot !== "" && (0, import_node_path11.isAbsolute)(fromRoot)) return null;
-  const packageRelative = normalizeRelPath(fromRoot.split(import_node_path11.sep).join("/"));
-  if (packageRelative === null) return null;
-  const slash = relativePath.lastIndexOf("/");
-  const dir = slash === -1 ? "." : relativePath.slice(0, slash);
-  const link = (0, import_posix.relative)(dir, packageRelative === "" ? "." : packageRelative);
-  const archiveTarget = link === "" ? "." : link;
-  if (!symlinkResolvesInside(relativePath, archiveTarget)) return null;
-  const resolved = resolvedSymlink(relativePath, archiveTarget);
-  if (packageRelative === "") {
-    if (resolved !== "") return null;
-  } else if (resolved !== packageRelative) {
-    return null;
-  }
-  return archiveTarget;
-}
-function writePackedEntry(gzip, root, relativePath, linkCache, statCache, getFailure, archiveLink) {
-  return new Promise((resolve2, reject) => {
+function writePackedEntry(gzip, root, relativePath, linkCache, statCache, getFailure, sourcePath, archiveLink) {
+  return new Promise((resolve3, reject) => {
     const existing = getFailure();
     if (existing) {
       reject(existing);
@@ -26271,7 +26418,7 @@ function writePackedEntry(gzip, root, relativePath, linkCache, statCache, getFai
     }
     const entry = new de(relativePath, {
       cwd: root,
-      absolute: (0, import_node_path11.join)(root, relativePath),
+      absolute: sourcePath,
       portable: true,
       strict: true,
       linkCache,
@@ -26289,7 +26436,7 @@ function writePackedEntry(gzip, root, relativePath, linkCache, statCache, getFai
       settled = true;
       gzip.off("error", onGzipError);
       if (error2) reject(error2);
-      else resolve2();
+      else resolve3();
     };
     const onGzipError = () => {
       const failure = getFailure();
@@ -26333,8 +26480,8 @@ function writePackedEntry(gzip, root, relativePath, linkCache, statCache, getFai
 }
 async function tempArchivePath() {
   const base = process.env.RUNNER_TEMP || (0, import_node_os.tmpdir)();
-  const dir = await (0, import_promises3.mkdtemp)((0, import_node_path11.join)(base, "alchemy-new-"));
-  return (0, import_node_path11.join)(dir, "alchemy.new.tar.gz");
+  const dir = await (0, import_promises3.mkdtemp)((0, import_node_path12.join)(base, "alchemy-new-"));
+  return (0, import_node_path12.join)(dir, "alchemy.new.tar.gz");
 }
 function memberMap(entries) {
   const files = /* @__PURE__ */ new Map();
@@ -26353,6 +26500,7 @@ async function pathExists(filePath) {
 }
 
 // src/validate.ts
+var import_node_path13 = require("node:path");
 function assertArchiveSize(sizeBytes, cap = MAX_ARCHIVE_BYTES) {
   if (sizeBytes <= 0) {
     throw new ActionError("Archive is empty.");
@@ -26403,22 +26551,51 @@ function assertNoRootManifest(entries) {
 function assertReadyArchive(entries, manifest) {
   assertNoRootManifest(entries);
   const files = memberMap(entries);
-  if (!files.has(manifest.entrypoint)) {
+  assertArchiveMember(
+    files,
+    manifest.entrypoint,
+    `Archive is missing deployment entrypoint "${manifest.entrypoint}". alchemy.new runs that file and does not build the app.`
+  );
+  assertArchiveMember(
+    files,
+    CLI_PATH,
+    `Archive is missing ${CLI_PATH}. Install production dependencies on linux/amd64 before packing. alchemy.new does not install them.`
+  );
+}
+function assertArchiveMember(files, path, missing) {
+  const entry = files.get(path);
+  if (!entry) throw new ActionError(missing);
+  if (entry.type === "file") return;
+  if (entry.type === "symlink" && entry.linkTarget) {
+    const problem = symlinkProblem(path, entry.linkTarget);
+    if (problem) throw new ActionError(problem);
+    return;
+  }
+  throw new ActionError(missing);
+}
+async function assertPresent(root, relativePath, selected, links, label) {
+  if (selected.has(relativePath)) {
+    const target = links.get(relativePath);
+    if (target !== void 0) {
+      const problem = symlinkProblem(relativePath, target);
+      if (problem) throw new ActionError(problem);
+    }
+    return;
+  }
+  if (await pathExists((0, import_node_path13.join)(root, relativePath))) {
     throw new ActionError(
-      `Archive is missing deployment entrypoint "${manifest.entrypoint}". alchemy.new runs that file and does not build the app.`
+      `${label} (${relativePath}) is in the package directory but the include/exclude rules dropped it.`
     );
   }
-  if (!files.has(CLI_PATH)) {
-    throw new ActionError(
-      `Archive is missing ${CLI_PATH}. Install production dependencies on linux/amd64 before packing. alchemy.new does not install them.`
-    );
-  }
+  throw new ActionError(
+    `Missing ${label} at ${relativePath}. alchemy.new does not install dependencies or build the app.`
+  );
 }
 
 // src/retry.ts
 function sleep(ms2) {
-  return new Promise((resolve2) => {
-    setTimeout(resolve2, ms2);
+  return new Promise((resolve3) => {
+    setTimeout(resolve3, ms2);
   });
 }
 var TRANSIENT_STATUS = /* @__PURE__ */ new Set([408, 429, 500, 502, 503, 504]);
@@ -27154,10 +27331,10 @@ function omittedFromArchive(file, manifestRelative) {
   return manifestRelative !== void 0 && !manifestRelative.includes("/") && file === manifestRelative;
 }
 function resolveManifestFile(options) {
-  const packageDirectory = options.archive ? void 0 : (0, import_node_path12.resolve)(options.path ?? options.workspace ?? process.cwd());
-  const base = packageDirectory ?? (0, import_node_path12.resolve)(options.workspace ?? process.cwd());
-  if (!options.manifest) return (0, import_node_path12.join)(base, MANIFEST_FILENAME);
-  return (0, import_node_path12.isAbsolute)(options.manifest) ? options.manifest : (0, import_node_path12.resolve)(base, options.manifest);
+  const packageDirectory = options.archive ? void 0 : (0, import_node_path14.resolve)(options.path ?? options.workspace ?? process.cwd());
+  const base = packageDirectory ?? (0, import_node_path14.resolve)(options.workspace ?? process.cwd());
+  if (!options.manifest) return (0, import_node_path14.join)(base, MANIFEST_FILENAME);
+  return (0, import_node_path14.isAbsolute)(options.manifest) ? options.manifest : (0, import_node_path14.resolve)(base, options.manifest);
 }
 async function publish(options) {
   const log = options.log ?? silentLogger;
@@ -27171,7 +27348,7 @@ async function publish(options) {
   if (options.archive && options.path) {
     throw new ActionError("Pass either archive or path, not both.");
   }
-  const prepared = options.archive ? await preparePrebuilt((0, import_node_path12.resolve)(options.archive), log) : await prepareDirectory(options, log);
+  const prepared = options.archive ? await preparePrebuilt((0, import_node_path14.resolve)(options.archive), log) : await prepareDirectory(options, log);
   const sizeBytes = await fileSize(prepared.archivePath);
   assertArchiveSize(sizeBytes);
   if (sizeBytes > RECOMMENDED_ARCHIVE_BYTES) {
@@ -27322,7 +27499,7 @@ async function preparePrebuilt(archivePath, log) {
   return { archivePath, excluded: [], excludedCount: 0 };
 }
 async function prepareDirectory(options, log) {
-  const directory = (0, import_node_path12.resolve)(options.path ?? options.workspace ?? process.cwd());
+  const directory = (0, import_node_path14.resolve)(options.path ?? options.workspace ?? process.cwd());
   log.info(`Packing ${directory}.`);
   const manifestFile = resolveManifestFile(options);
   const loaded = await loadManifest(manifestFile);
@@ -27338,11 +27515,22 @@ async function prepareDirectory(options, log) {
 ${lines.join("\n")}`);
   }
   const files = filesForArchive(selection.files, manifestRelative);
+  const links = /* @__PURE__ */ new Map();
+  for (const file of files) {
+    const target = selection.links.get(file);
+    if (target !== void 0) links.set(file, target);
+  }
   const selected = new Set(files);
-  await assertPresent(directory, loaded.manifest.entrypoint, selected, "deployment entrypoint");
-  await assertPresent(directory, CLI_PATH, selected, CLI_PATH);
+  await assertPresent(
+    directory,
+    loaded.manifest.entrypoint,
+    selected,
+    links,
+    "deployment entrypoint"
+  );
+  await assertPresent(directory, CLI_PATH, selected, links, CLI_PATH);
   const archivePath = await tempArchivePath();
-  await packFiles(directory, files, archivePath);
+  await packFiles(directory, files, archivePath, { links });
   log.info(`Wrote ${archivePath}.`);
   const omitted = selection.files.filter((file) => omittedFromArchive(file, manifestRelative));
   return {
@@ -27377,22 +27565,11 @@ async function loadManifest(manifestPath) {
   };
 }
 function relativeInside(directory, filePath) {
-  const rel = (0, import_node_path12.relative)(directory, filePath);
-  if (rel === "" || rel.startsWith("..") || (0, import_node_path12.isAbsolute)(rel)) return void 0;
+  const rel = (0, import_node_path14.relative)(directory, filePath);
+  if (rel === "" || rel.startsWith("..") || (0, import_node_path14.isAbsolute)(rel)) return void 0;
   const normalized = normalizeRelPath(rel);
   if (!normalized) return void 0;
   return normalized;
-}
-async function assertPresent(root, relativePath, selected, label) {
-  if (selected.has(relativePath)) return;
-  if (await pathExists((0, import_node_path12.join)(root, relativePath))) {
-    throw new ActionError(
-      `${label} (${relativePath}) is in the package directory but the include/exclude rules dropped it.`
-    );
-  }
-  throw new ActionError(
-    `Missing ${label} at ${relativePath}. alchemy.new does not install dependencies or build the app.`
-  );
 }
 
 // src/main.ts

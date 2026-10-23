@@ -1,9 +1,12 @@
-import { readdir } from "node:fs/promises"
+import { type Stats } from "node:fs"
+import { readdir, readlink, stat } from "node:fs/promises"
 import { join } from "node:path"
 import ignore from "ignore"
+import { ALCHEMY_PACKAGE_PATH } from "./constants.ts"
 import { ActionError } from "./errors.ts"
-import { hardRejectReason, isDefaultExcluded } from "./rules.ts"
+import { packageRelativeTarget, relativeArchiveLink, symlinkProblem } from "./links.ts"
 import { normalizeRelPath } from "./paths.ts"
+import { hardRejectReason, isDefaultExcluded } from "./rules.ts"
 
 interface SelectOptions {
   includes: string[]
@@ -13,6 +16,8 @@ interface SelectOptions {
 
 interface Selection {
   files: string[]
+  /** Relative symlink text for paths expanded from `node_modules/alchemy`. */
+  links: Map<string, string>
   excluded: string[]
   excludedCount: number
   rejected: Array<{ path: string; reason: string }>
@@ -70,16 +75,117 @@ export function classifyPath(
 
 const EXCLUDED_SAMPLE = 200
 
-/** Walk `root` and choose files to pack. Does not follow directory symlinks. */
+function fsErrorCode(error: unknown): string {
+  if (!(error instanceof Error) || !("code" in error)) return ""
+  return String(error.code)
+}
+
+/**
+ * Walk `root` and choose files to pack.
+ * Directory symlinks stay as one entry, except `node_modules/alchemy` when it
+ * points at a directory inside the package. An absolute target is accepted
+ * when that directory stays inside the package root. The link is expanded into
+ * one relative symlink per file so `node_modules/alchemy/bin/cli.js` is a member.
+ */
 export async function selectFiles(root: string, options: SelectOptions): Promise<Selection> {
   assertRelativePatterns("include", options.includes)
   assertRelativePatterns("exclude", options.excludes)
   const includes = options.includes.length > 0 ? matcher(options.includes, "include") : undefined
   const excludes = matcher(options.excludes, "exclude")
   const files: string[] = []
+  const links = new Map<string, string>()
   const excluded: string[] = []
   let excludedCount = 0
   const rejected: Array<{ path: string; reason: string }> = []
+
+  const noteExcluded = (rel: string): void => {
+    excludedCount += 1
+    if (excluded.length < EXCLUDED_SAMPLE) excluded.push(rel)
+  }
+
+  const noteRejected = (path: string, reason: string): void => {
+    rejected.push({ path, reason })
+  }
+
+  async function walkLinked(realDir: string, logicalDir: string): Promise<void> {
+    const entries = await readdir(join(root, realDir), { withFileTypes: true })
+    for (const entry of entries) {
+      const logical = `${logicalDir}/${entry.name}`
+      const real = `${realDir}/${entry.name}`
+      const decision = classifyPath(logical, options, includes, excludes)
+      if (decision.kind === "exclude") {
+        noteExcluded(logical)
+        continue
+      }
+      if (decision.kind === "reject") {
+        noteRejected(logical, decision.reason)
+        continue
+      }
+      if (entry.isSymbolicLink()) {
+        const target = await readlink(join(root, real))
+        const resolved = packageRelativeTarget(root, real, target)
+        if (resolved === null) {
+          noteRejected(logical, `symlink ${logical} points outside the package root (${target})`)
+          continue
+        }
+        const reason = hardRejectReason(resolved)
+        if (reason) {
+          noteRejected(logical, `symlink ${logical} points at a forbidden path (${resolved})`)
+          continue
+        }
+        recordLink(logical, resolved)
+        continue
+      }
+      if (entry.isDirectory()) {
+        await walkLinked(real, logical)
+        continue
+      }
+      if (entry.isFile()) {
+        recordLink(logical, real)
+        continue
+      }
+      noteExcluded(logical)
+    }
+  }
+
+  function recordLink(logical: string, real: string): void {
+    const target = relativeArchiveLink(logical, real)
+    const problem = symlinkProblem(logical, target)
+    if (problem) {
+      noteRejected(logical, problem)
+      return
+    }
+    files.push(logical)
+    links.set(logical, target)
+  }
+
+  async function expandAlchemyLink(rel: string): Promise<boolean> {
+    const target = await readlink(join(root, rel))
+    const resolved = packageRelativeTarget(root, rel, target)
+    if (resolved === null) {
+      noteRejected(rel, `symlink ${rel} points outside the package root (${target})`)
+      return true
+    }
+    if (resolved === rel || resolved.startsWith(`${rel}/`)) {
+      noteRejected(rel, `symlink ${rel} points at itself (${target})`)
+      return true
+    }
+    let info: Stats
+    try {
+      info = await stat(join(root, resolved))
+    } catch (error) {
+      const code = fsErrorCode(error)
+      if (code === "ENOENT") return false
+      if (code === "ELOOP") {
+        noteRejected(rel, `symlink ${rel} points at itself (${target})`)
+        return true
+      }
+      throw error
+    }
+    if (!info.isDirectory()) return false
+    await walkLinked(resolved, rel)
+    return true
+  }
 
   async function walk(relDir: string): Promise<void> {
     const absolute = relDir === "" ? root : join(root, relDir)
@@ -88,15 +194,15 @@ export async function selectFiles(root: string, options: SelectOptions): Promise
       const rel = relDir === "" ? entry.name : `${relDir}/${entry.name}`
       const decision = classifyPath(rel, options, includes, excludes)
       if (decision.kind === "exclude") {
-        excludedCount += 1
-        if (excluded.length < EXCLUDED_SAMPLE) excluded.push(rel)
+        noteExcluded(rel)
         continue
       }
       if (decision.kind === "reject") {
-        rejected.push({ path: rel, reason: decision.reason })
+        noteRejected(rel, decision.reason)
         continue
       }
       if (entry.isSymbolicLink()) {
+        if (rel === ALCHEMY_PACKAGE_PATH && (await expandAlchemyLink(rel))) continue
         files.push(rel)
         continue
       }
@@ -108,12 +214,11 @@ export async function selectFiles(root: string, options: SelectOptions): Promise
         files.push(rel)
         continue
       }
-      excludedCount += 1
-      if (excluded.length < EXCLUDED_SAMPLE) excluded.push(rel)
+      noteExcluded(rel)
     }
   }
 
   await walk("")
   files.sort()
-  return { files, excluded, excludedCount, rejected }
+  return { files, links, excluded, excludedCount, rejected }
 }
