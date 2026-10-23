@@ -94,22 +94,22 @@ Paste an `anr_` token only. An `anu_` grant cannot be pasted into `token`. The a
 
 ## Inputs
 
-| Input              | Default                                 | Description                                                                                                                        |
-| ------------------ | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `package`          | manifest `source`                       | `org/project`. Must match `alchemy.new.jsonc`.                                                                                     |
-| `org`              | manifest `source.org`                   | Registry org. Must match the manifest when both are set.                                                                           |
-| `project`          | manifest `source.project`               | Registry project. Must match the manifest when both are set.                                                                       |
-| `version`          | git tag, then `source.version`          | Exact semver without build metadata. A tag `v1.2.3` becomes `1.2.3`.                                                               |
-| `archive`          |                                         | Prebuilt `.tar.gz` whose root is the package root. Mutually exclusive with `path`.                                                 |
-| `path`             | workspace, when `archive` is omitted    | Directory to pack.                                                                                                                 |
-| `manifest`         | `alchemy.new.jsonc` at the package root | Raw manifest file. Uploaded separately. Comments are kept. At most 256 KB.                                                         |
-| `include`          | pack the directory                      | Newline-separated gitignore patterns. Only matching paths are considered.                                                          |
-| `exclude`          |                                         | Extra gitignore patterns, dropped in addition to the defaults.                                                                     |
-| `default-excludes` | `true`                                  | Drop VCS metadata, secrets, tests, caches, and dev junk.                                                                           |
-| `registry-url`     | `https://api.alchemy.new`               | API origin. The action appends `/v1/...`. Pre is `https://api-pre.alchemy.new`.                                                    |
-| `token`            | OIDC exchange                           | `anr_` API token.                                                                                                                  |
-| `dry-run`          | `false`                                 | Validate and write the summary. Do not call the registry.                                                                          |
-| `on-immutable`     | `fail`                                  | `fail`, or `skip-if-digest-matches` when the archive sha256 matches and the manifest sha256 matches if the version record has one. |
+| Input              | Default                                 | Description                                                                                                               |
+| ------------------ | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `package`          | manifest `source`                       | `org/project`. Must match `alchemy.new.jsonc`.                                                                            |
+| `org`              | manifest `source.org`                   | Registry org. Must match the manifest when both are set.                                                                  |
+| `project`          | manifest `source.project`               | Registry project. Must match the manifest when both are set.                                                              |
+| `version`          | git tag, then `source.version`          | Exact semver without build metadata. A tag `v1.2.3` becomes `1.2.3`.                                                      |
+| `archive`          |                                         | Prebuilt `.tar.gz` whose root is the package root. Mutually exclusive with `path`.                                        |
+| `path`             | workspace, when `archive` is omitted    | Directory to pack.                                                                                                        |
+| `manifest`         | `alchemy.new.jsonc` at the package root | Raw manifest file. Uploaded separately. Comments are kept. At most 256 KB.                                                |
+| `include`          | pack the directory                      | Newline-separated gitignore patterns. Only matching paths are considered.                                                 |
+| `exclude`          |                                         | Extra gitignore patterns, dropped in addition to the defaults.                                                            |
+| `default-excludes` | `true`                                  | Drop VCS metadata, secrets, tests, caches, and dev junk.                                                                  |
+| `registry-url`     | `https://api.alchemy.new`               | API origin. The action appends `/v1/...`. Pre is `https://api-pre.alchemy.new`.                                           |
+| `token`            | OIDC exchange                           | `anr_` API token.                                                                                                         |
+| `dry-run`          | `false`                                 | Validate and write the summary. Do not call the registry.                                                                 |
+| `on-immutable`     | `skip-if-digest-matches`                | Skip when the archive sha256 matches and the manifest sha256 matches if the version record has one. `fail` stops the run. |
 
 `include` and `exclude` accept `#` comments on their own lines.
 
@@ -123,7 +123,7 @@ Paste an `anr_` token only. An `anu_` grant cannot be pasted into `token`. The a
 | `size`            | Archive size in bytes.                                                |
 | `url`             | Deploy URL, `https://alchemy.new/?package=org/project&version=1.2.3`. |
 
-The job summary lists the archive size, both digests, packed files, and paths the packer excluded. It also says `alchemy.new.jsonc` is not in the archive. A dry run sets the same outputs from the local files.
+The job summary lists the archive size, both digests, packed files, and paths the packer excluded. It also says `alchemy.new.jsonc` is not in the archive. A skipped publish says that the publish was skipped. A dry run sets the same outputs from the local files.
 
 ## What gets packed
 
@@ -170,16 +170,16 @@ Packing writes a temporary `.tar.gz` on disk. File bytes are read and compressed
 
 ## Immutable versions
 
-Publishing the same version again is a conflict. The action looks up the version first.
+The action looks up the version before it uploads. `on-immutable` defaults to `skip-if-digest-matches`.
 
 - The archive sha256 differs, or the version record includes a manifest sha256 that differs: the run fails and prints the digests. Publish a new version.
-- The digests match and `on-immutable` is `fail`: the run fails and tells you the bytes are already published.
-- The digests match and `on-immutable` is `skip-if-digest-matches`: the run succeeds, sets outputs from that version, and does not upload. A version record with no `manifestSha256` is compared on the archive digest only.
-- A yanked version is still immutable. The message says it cannot be replaced and will not deploy.
+- The digests match: the run succeeds, sets outputs from that version, and does not upload. The job summary says the publish was skipped. A version record with no `manifestSha256` is compared on the archive digest only.
+- Set `on-immutable` to `fail` when a matching digest must stop the run. The message says the bytes are already published.
+- A yanked version stays immutable. The message says it cannot be replaced and will not deploy.
 
 ```yaml
 with:
-  on-immutable: skip-if-digest-matches
+  on-immutable: fail
 ```
 
 ## Dry run

@@ -54,7 +54,7 @@ export function parseActionInputs(raw: {
   dryRun?: string
   onImmutable?: string
 }): ActionInputs {
-  const onImmutable = blank(raw.onImmutable) ?? "fail"
+  const onImmutable = blank(raw.onImmutable) ?? "skip-if-digest-matches"
   if (onImmutable !== "fail" && onImmutable !== "skip-if-digest-matches") {
     throw new ActionError(
       `Input on-immutable must be "fail" or "skip-if-digest-matches". Received ${JSON.stringify(onImmutable)}.`,

@@ -10,8 +10,18 @@ describe("parseActionInputs", () => {
     assert.equal(inputs.registryUrl, "https://api.alchemy.new")
     assert.equal(inputs.dryRun, false)
     assert.equal(inputs.defaultExcludes, true)
-    assert.equal(inputs.onImmutable, "fail")
+    assert.equal(inputs.onImmutable, "skip-if-digest-matches")
     assert.equal(inputs.token, undefined)
+  })
+
+  it("falls back to skip-if-digest-matches when on-immutable is blank", () => {
+    const inputs = parseActionInputs({ onImmutable: "  " })
+    assert.equal(inputs.onImmutable, "skip-if-digest-matches")
+  })
+
+  it("keeps an explicit on-immutable value of fail", () => {
+    const inputs = parseActionInputs({ onImmutable: " fail " })
+    assert.equal(inputs.onImmutable, "fail")
   })
 
   it("falls back to production when registry-url is blank", () => {

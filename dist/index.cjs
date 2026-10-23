@@ -21280,7 +21280,7 @@ function blank(value) {
   return trimmed === "" ? void 0 : trimmed;
 }
 function parseActionInputs(raw) {
-  const onImmutable = blank(raw.onImmutable) ?? "fail";
+  const onImmutable = blank(raw.onImmutable) ?? "skip-if-digest-matches";
   if (onImmutable !== "fail" && onImmutable !== "skip-if-digest-matches") {
     throw new ActionError(
       `Input on-immutable must be "fail" or "skip-if-digest-matches". Received ${JSON.stringify(onImmutable)}.`
@@ -27061,7 +27061,7 @@ function listBlock(title, paths, total) {
   return lines.join("\n");
 }
 function renderSummary(info2) {
-  const result = info2.dryRun ? "Dry run. Nothing was uploaded." : info2.skipped ? "Skipped. This version is already published with the same digests." : "Published.";
+  const result = info2.dryRun ? "Dry run. Nothing was uploaded." : info2.skipped ? "The publish was skipped. This version is already published with the same digests." : "Published.";
   const lines = [
     "## alchemy.new publish",
     "",
