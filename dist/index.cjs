@@ -21251,7 +21251,7 @@ var RegistryError = class extends ActionError {
 
 // src/constants.ts
 var OIDC_AUDIENCE = "https://alchemy.new/registry/publish";
-var DEFAULT_REGISTRY_URL = "https://alchemy-new-api-prod.jonbeckman.workers.dev";
+var DEFAULT_REGISTRY_URL = "https://api.alchemy.new";
 var DEPLOY_SITE = "https://alchemy.new";
 var MANIFEST_FILENAME = "alchemy.new.jsonc";
 var CLI_PATH = "node_modules/alchemy/bin/cli.js";
@@ -27116,7 +27116,7 @@ async function publish(options) {
   if (registryUrl.startsWith("http://")) {
     const host = new URL(registryUrl).hostname;
     if (host !== "localhost" && host !== "127.0.0.1") {
-      log.warn(`registry-url uses http (${registryUrl}). Production is https://alchemy.new.`);
+      log.warn(`registry-url uses http (${registryUrl}). Production is ${DEFAULT_REGISTRY_URL}.`);
     }
   }
   if (options.archive && options.path) {

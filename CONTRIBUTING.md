@@ -55,4 +55,4 @@ After Tegami creates a stable `1.x.y` tag, the same job moves the floating `v1` 
 
 Pull requests also run Tegami PR Preview, which uploads a release note artifact. Tegami PR Comment posts that note from a trusted checkout of the default branch. The preview job does not receive a token that can write to the repository.
 
-Users pin `SolZeroAI/alchemy-new-publish-action@v1`. Until the first stable 1.x release, that tag does not exist; pin a commit SHA.
+Users pin `SolZeroAI/alchemy-new-publish-action@v1`.
