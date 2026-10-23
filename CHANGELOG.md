@@ -1,3 +1,25 @@
+## alchemy-new-publish-action@1.0.1
+
+### Alchemy package links
+
+When `node_modules/alchemy` is a directory symlink into the package, the archive gets a relative symlink for each file under it. An absolute link is included when its target stays inside the package root. `node_modules/alchemy/bin/cli.js` is then its own member. A target that leaves the package root, or that points at a forbidden path, still fails the run.
+
+### Default pack excludes
+
+Packing drops `.agents`, `.cursor`, `.claude`, `.tegami`, and `.changeset` at any depth. Inside `node_modules` only, packing also drops `*.d.ts`, `*.map`, and `*.md`. Markdown outside `node_modules` stays in the archive.
+
+### What changed
+
+Packing rewrites an absolute symlink whose target stays inside the package root into the equivalent relative symlink in the archive. The link on disk is not changed. A symlink that leaves the package root, or that points at a forbidden path, still fails the run.
+
+### What changed
+
+`on-immutable` now defaults to `skip-if-digest-matches`. When the same package version already exists with the same archive digest, and the same manifest digest when the version record has one, the publish succeeds and uploads nothing. The job summary says the publish was skipped. A different digest for that version still fails. Set `on-immutable` to `fail` to stop the run when the version already exists.
+
+### Production registry host
+
+The default registry origin is https://api.alchemy.new. Pre stays available through the registry-url input as https://api-pre.alchemy.new.
+
 ## alchemy-new-publish-action@1.0.0
 
 ### Initial release
