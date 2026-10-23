@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises"
 import { isAbsolute, join, relative, resolve } from "node:path"
 import {
   CLI_PATH,
+  DEFAULT_REGISTRY_URL,
   MANIFEST_FILENAME,
   MAX_MANIFEST_BYTES,
   RECOMMENDED_ARCHIVE_BYTES,
@@ -121,7 +122,7 @@ export async function publish(options: PublishOptions): Promise<PublishResult> {
   if (registryUrl.startsWith("http://")) {
     const host = new URL(registryUrl).hostname
     if (host !== "localhost" && host !== "127.0.0.1") {
-      log.warn(`registry-url uses http (${registryUrl}). Production is https://alchemy.new.`)
+      log.warn(`registry-url uses http (${registryUrl}). Production is ${DEFAULT_REGISTRY_URL}.`)
     }
   }
   if (options.archive && options.path) {

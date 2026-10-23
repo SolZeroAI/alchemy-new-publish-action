@@ -31,18 +31,17 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7
 
       - name: Setup Node
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        uses: actions/setup-node@v7
         with:
           node-version: 24
-          cache: npm
 
       - name: Install and build
         run: |
-          npm ci --omit=dev
-          npm run build
+          nub install --frozen-lockfile
+          nub run build
 
       - name: Publish to alchemy.new
         uses: SolZeroAI/alchemy-new-publish-action@v1
@@ -63,8 +62,6 @@ A prebuilt archive works too. `org` and `project` are separate inputs so the reg
     version: 1.2.3
     archive: alchemy.new.tar.gz
 ```
-
-`@v1` exists after the first stable release. Until then, pin a commit SHA.
 
 ## Trusted publisher
 
@@ -109,7 +106,7 @@ Paste an `anr_` token only. An `anu_` grant cannot be pasted into `token`. The a
 | `include`          | pack the directory                      | Newline-separated gitignore patterns. Only matching paths are considered.                                                          |
 | `exclude`          |                                         | Extra gitignore patterns, dropped in addition to the defaults.                                                                     |
 | `default-excludes` | `true`                                  | Drop VCS metadata, secrets, tests, caches, and dev junk.                                                                           |
-| `registry-url`     | production API origin                   | API origin. The action appends `/v1/...`.                                                                                          |
+| `registry-url`     | `https://api.alchemy.new`               | API origin. The action appends `/v1/...`. Pre is `https://api-pre.alchemy.new`.                                                    |
 | `token`            | OIDC exchange                           | `anr_` API token.                                                                                                                  |
 | `dry-run`          | `false`                                 | Validate and write the summary. Do not call the registry.                                                                          |
 | `on-immutable`     | `fail`                                  | `fail`, or `skip-if-digest-matches` when the archive sha256 matches and the manifest sha256 matches if the version record has one. |
@@ -207,9 +204,9 @@ This action does not yank, deprecate, mint tokens, or submit a listing. `POST /v
 
 ## Contract notes
 
-The publish contract calls the base URL "the alchemy.new API origin" and does not name a host. `https://alchemy.new` is the website. A request to `https://alchemy.new/v1/...` returns HTTP 500 `{"error":"Only HTML requests are supported here"}`. The live web app calls `https://alchemy-new-api-prod.jonbeckman.workers.dev`, so that origin is the default `registry-url`. The deploy URL stays on `https://alchemy.new`.
+Production is `https://api.alchemy.new`. That origin is the default `registry-url`. Pre is `https://api-pre.alchemy.new`. Set `registry-url` to publish there. `https://alchemy.new` is the website. A request to `https://alchemy.new/v1/...` returns HTTP 500 `{"error":"Only HTML requests are supported here"}`. The deploy URL stays on `https://alchemy.new`.
 
-That production worker's OpenAPI document, as fetched while this action was written, does not list `/v1/oidc/github/exchange` or `/v1/packages/...` yet. Those routes are the unpublished registry contract this action implements. `GET /v1/packages/example-org/example-stack` on that host returned an empty 404. Nothing here was uploaded to a live registry.
+The OpenAPI document fetched while this action was written does not list `/v1/oidc/github/exchange` or `/v1/packages/...` yet. Those routes are the unpublished registry contract this action implements. `GET /v1/packages/example-org/example-stack` returned an empty 404. Nothing here was uploaded to a live registry.
 
 Other readings, where the contract was loose:
 

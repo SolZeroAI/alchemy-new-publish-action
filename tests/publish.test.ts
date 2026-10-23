@@ -398,6 +398,31 @@ describe("publish", () => {
       await pkg.cleanup()
     }
   })
+
+  it("warns when registry-url uses http and names the production API", async () => {
+    const pkg = await makePackage()
+    const log = recordingLogger()
+    try {
+      await publish({
+        path: pkg.root,
+        version: "1.2.3",
+        include: [],
+        exclude: [],
+        defaultExcludes: true,
+        registryUrl: "http://example.test",
+        dryRun: true,
+        onImmutable: "fail",
+        log,
+      })
+      assert.ok(
+        log.lines.includes(
+          "registry-url uses http (http://example.test). Production is https://api.alchemy.new.",
+        ),
+      )
+    } finally {
+      await pkg.cleanup()
+    }
+  })
 })
 
 describe("sha256File", () => {

@@ -3,11 +3,10 @@ export const OIDC_AUDIENCE = "https://alchemy.new/registry/publish"
 
 /**
  * Production API origin.
- * The publish contract says the base URL is the alchemy.new API origin and
- * does not name a host. https://alchemy.new serves the website and rejects
- * `/v1` calls. The live web app calls this Worker. Override with `registry-url`.
+ * https://alchemy.new serves the website and rejects `/v1` calls.
+ * Pre is https://api-pre.alchemy.new. Pass that origin in `registry-url`.
  */
-export const DEFAULT_REGISTRY_URL = "https://alchemy-new-api-prod.jonbeckman.workers.dev"
+export const DEFAULT_REGISTRY_URL = "https://api.alchemy.new"
 
 /** Public deploy site. Distinct from the API origin. */
 export const DEPLOY_SITE = "https://alchemy.new"
