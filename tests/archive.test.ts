@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { randomFillSync } from "node:crypto"
-import { linkSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs"
+import { linkSync, mkdirSync, readlinkSync, symlinkSync, writeFileSync } from "node:fs"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -152,6 +152,143 @@ describe("packing", () => {
     }
   })
 
+  it("rewrites an absolute symlink that stays inside the package root", async () => {
+    const root = await mkdtemp(join(tmpdir(), "alchemy-abs-"))
+    const out = await mkdtemp(join(tmpdir(), "alchemy-abs-out-"))
+    try {
+      const pkgDir = join(root, "store", "pkg")
+      const binDir = join(root, "node_modules", ".bin")
+      mkdirSync(pkgDir, { recursive: true })
+      mkdirSync(binDir, { recursive: true })
+      writeFileSync(join(pkgDir, "cli.js"), "#!/usr/bin/env node\n")
+      const packageLink = join(root, "node_modules", "pkg")
+      const packageTarget = join(root, "store", "pkg")
+      symlinkSync(packageTarget, packageLink)
+      const binLink = join(binDir, "cli")
+      const binTarget = join(pkgDir, "cli.js")
+      symlinkSync(binTarget, binLink)
+      const normalizedTarget = join(root, "store", "pkg", "..", "pkg", "cli.js")
+      const normalizedLink = join(binDir, "normalized")
+      symlinkSync(normalizedTarget, normalizedLink)
+      const deepName = "p".repeat(90)
+      const deepDir = join(root, "store", deepName)
+      mkdirSync(deepDir, { recursive: true })
+      writeFileSync(join(deepDir, "cli.js"), "#!/usr/bin/env node\n")
+      const deepLink = join(binDir, "deep")
+      const deepTarget = join(deepDir, "cli.js")
+      symlinkSync(deepTarget, deepLink)
+      const archive = join(out, "abs.tar.gz")
+      await packFiles(
+        root,
+        [
+          "store/pkg/cli.js",
+          `store/${deepName}/cli.js`,
+          "node_modules/pkg",
+          "node_modules/.bin/cli",
+          "node_modules/.bin/normalized",
+          "node_modules/.bin/deep",
+        ],
+        archive,
+      )
+      const entries = await listArchive(archive)
+      const packedPackage = entries.find((entry) => entry.path === "node_modules/pkg")
+      assert.equal(packedPackage?.type, "symlink")
+      assert.equal(packedPackage?.linkTarget, "../store/pkg")
+      const packedBin = entries.find((entry) => entry.path === "node_modules/.bin/cli")
+      assert.equal(packedBin?.type, "symlink")
+      assert.equal(packedBin?.linkTarget, "../../store/pkg/cli.js")
+      const packedNormalized = entries.find(
+        (entry) => entry.path === "node_modules/.bin/normalized",
+      )
+      assert.equal(packedNormalized?.type, "symlink")
+      assert.equal(packedNormalized?.linkTarget, "../../store/pkg/cli.js")
+      const packedDeep = entries.find((entry) => entry.path === "node_modules/.bin/deep")
+      const deepLinkTarget = `../../store/${deepName}/cli.js`
+      assert.equal(packedDeep?.type, "symlink")
+      assert.equal(packedDeep?.linkTarget, deepLinkTarget)
+      assert.ok(deepLinkTarget.length > 100)
+      assert.equal(
+        entries.some((entry) => entry.linkTarget?.startsWith("/")),
+        false,
+      )
+      assert.equal(readlinkSync(packageLink), packageTarget)
+      assert.equal(readlinkSync(binLink), binTarget)
+      assert.equal(readlinkSync(normalizedLink), normalizedTarget)
+      assert.equal(readlinkSync(deepLink), deepTarget)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+      await rm(out, { recursive: true, force: true })
+    }
+  })
+
+  it("rejects an absolute symlink that leaves the package root", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "alchemy-abs-out-"))
+    const root = join(parent, "pkg")
+    const sibling = join(parent, "pkg-secret")
+    const out = await mkdtemp(join(tmpdir(), "alchemy-abs-reject-"))
+    try {
+      mkdirSync(root)
+      mkdirSync(join(sibling, "nested"), { recursive: true })
+      writeFileSync(join(root, "keep.txt"), "keep")
+      writeFileSync(join(sibling, "nested", "secret.txt"), "nope")
+      const siblingLink = join(root, "sibling")
+      const siblingTarget = join(sibling, "nested", "secret.txt")
+      symlinkSync(siblingTarget, siblingLink)
+      const dotdotLink = join(root, "dotdot")
+      const dotdotTarget = join(root, "..", "pkg-secret", "nested", "secret.txt")
+      symlinkSync(dotdotTarget, dotdotLink)
+      const driveLink = join(root, "drive")
+      symlinkSync("C:/Windows/System32", driveLink)
+      await assert.rejects(
+        () => packFiles(root, ["keep.txt", "sibling"], join(out, "sibling.tar.gz")),
+        /points outside the package root/,
+      )
+      await assert.rejects(
+        () => packFiles(root, ["dotdot"], join(out, "dotdot.tar.gz")),
+        /points outside the package root/,
+      )
+      await assert.rejects(
+        () => packFiles(root, ["drive"], join(out, "drive.tar.gz")),
+        /points outside the package root/,
+      )
+      assert.equal(readlinkSync(siblingLink), siblingTarget)
+      assert.equal(readlinkSync(dotdotLink), dotdotTarget)
+      assert.equal(readlinkSync(driveLink), "C:/Windows/System32")
+    } finally {
+      await rm(parent, { recursive: true, force: true })
+      await rm(out, { recursive: true, force: true })
+    }
+  })
+
+  it("rejects an absolute symlink that points at a forbidden path", async () => {
+    const root = await mkdtemp(join(tmpdir(), "alchemy-abs-forbid-"))
+    const out = await mkdtemp(join(tmpdir(), "alchemy-abs-forbid-out-"))
+    try {
+      writeFileSync(join(root, ".env"), "SECRET=1\n")
+      mkdirSync(join(root, ".git"))
+      writeFileSync(join(root, ".git", "config"), "[core]\n")
+      const envLink = join(root, "leak-env")
+      const envTarget = join(root, ".env")
+      symlinkSync(envTarget, envLink)
+      const gitLink = join(root, "leak-git")
+      const gitTarget = join(root, ".git", "config")
+      symlinkSync(gitTarget, gitLink)
+      await assert.rejects(
+        () => packFiles(root, ["leak-env"], join(out, "env.tar.gz")),
+        /points at a forbidden path \(\.env\)/,
+      )
+      await assert.rejects(
+        () => packFiles(root, ["leak-git"], join(out, "git.tar.gz")),
+        /points at a forbidden path \(\.git\/config\)/,
+      )
+      assert.equal(readlinkSync(envLink), envTarget)
+      assert.equal(readlinkSync(gitLink), gitTarget)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+      await rm(out, { recursive: true, force: true })
+    }
+  })
+
   it("rejects a symlink that points outside the package root", async () => {
     const root = await mkdtemp(join(tmpdir(), "alchemy-escape-"))
     const out = await mkdtemp(join(tmpdir(), "alchemy-escape-out-"))
@@ -251,6 +388,40 @@ describe("packing", () => {
             },
           }),
         /archive root/,
+      )
+    } finally {
+      await rm(root, { recursive: true, force: true })
+      await rm(out, { recursive: true, force: true })
+    }
+  })
+
+  it("fails a dry run when a prebuilt archive contains an absolute symlink", async () => {
+    const root = await mkdtemp(join(tmpdir(), "alchemy-prebuilt-link-"))
+    const out = await mkdtemp(join(tmpdir(), "alchemy-prebuilt-link-out-"))
+    const archive = join(out, "absolute.tar.gz")
+    try {
+      writeFileSync(join(root, "keep.txt"), "keep")
+      symlinkSync("/etc/passwd", join(root, "absolute"))
+      await create({ gzip: true, cwd: root, file: archive, portable: true }, [
+        "keep.txt",
+        "absolute",
+      ])
+      await assert.rejects(
+        () =>
+          publish({
+            archive,
+            version: "1.2.3",
+            include: [],
+            exclude: [],
+            defaultExcludes: true,
+            registryUrl: "https://alchemy.new",
+            dryRun: true,
+            onImmutable: "fail",
+            fetchImpl: async () => {
+              throw new Error("dry-run called the network")
+            },
+          }),
+        /points outside the archive/,
       )
     } finally {
       await rm(root, { recursive: true, force: true })
