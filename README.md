@@ -94,22 +94,22 @@ Paste an `anr_` token only. An `anu_` grant cannot be pasted into `token`. The a
 
 ## Inputs
 
-| Input              | Default                                 | Description                                                                                                               |
-| ------------------ | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `package`          | manifest `source`                       | `org/project`. Must match `alchemy.new.jsonc`.                                                                            |
-| `org`              | manifest `source.org`                   | Registry org. Must match the manifest when both are set.                                                                  |
-| `project`          | manifest `source.project`               | Registry project. Must match the manifest when both are set.                                                              |
-| `version`          | git tag, then `source.version`          | Exact semver without build metadata. A tag `v1.2.3` becomes `1.2.3`.                                                      |
-| `archive`          |                                         | Prebuilt `.tar.gz` whose root is the package root. Mutually exclusive with `path`.                                        |
-| `path`             | workspace, when `archive` is omitted    | Directory to pack.                                                                                                        |
-| `manifest`         | `alchemy.new.jsonc` at the package root | Raw manifest file. Uploaded separately. Comments are kept. At most 256 KB.                                                |
-| `include`          | pack the directory                      | Newline-separated gitignore patterns. Only matching paths are considered.                                                 |
-| `exclude`          |                                         | Extra gitignore patterns, dropped in addition to the defaults.                                                            |
-| `default-excludes` | `true`                                  | Drop VCS metadata, secrets, tests, caches, and dev junk.                                                                  |
-| `registry-url`     | `https://api.alchemy.new`               | API origin. The action appends `/v1/...`. Pre is `https://api-pre.alchemy.new`.                                           |
-| `token`            | OIDC exchange                           | `anr_` API token.                                                                                                         |
-| `dry-run`          | `false`                                 | Validate and write the summary. Do not call the registry.                                                                 |
-| `on-immutable`     | `skip-if-digest-matches`                | Skip when the archive sha256 matches and the manifest sha256 matches if the version record has one. `fail` stops the run. |
+| Input              | Default                                 | Description                                                                                                                |
+| ------------------ | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `package`          | manifest `source`                       | `org/project`. Must match `alchemy.new.jsonc`.                                                                             |
+| `org`              | manifest `source.org`                   | Registry org. Must match the manifest when both are set.                                                                   |
+| `project`          | manifest `source.project`               | Registry project. Must match the manifest when both are set.                                                               |
+| `version`          | git tag, then `source.version`          | Exact semver without build metadata. A tag `v1.2.3` becomes `1.2.3`.                                                       |
+| `archive`          |                                         | Prebuilt `.tar.gz` whose root is the package root. Mutually exclusive with `path`.                                         |
+| `path`             | workspace, when `archive` is omitted    | Directory to pack.                                                                                                         |
+| `manifest`         | `alchemy.new.jsonc` at the package root | Raw manifest file. Uploaded separately. Comments are kept. At most 256 KB.                                                 |
+| `include`          | pack the directory                      | Newline-separated gitignore patterns. Only matching paths are considered.                                                  |
+| `exclude`          |                                         | Extra gitignore patterns, dropped in addition to the defaults.                                                             |
+| `default-excludes` | `true`                                  | Drop VCS metadata, secrets, tests, caches, agent directories, and dev junk. In node_modules, drop *.d.ts, *.map, and *.md. |
+| `registry-url`     | `https://api.alchemy.new`               | API origin. The action appends `/v1/...`. Pre is `https://api-pre.alchemy.new`.                                            |
+| `token`            | OIDC exchange                           | `anr_` API token.                                                                                                          |
+| `dry-run`          | `false`                                 | Validate and write the summary. Do not call the registry.                                                                  |
+| `on-immutable`     | `skip-if-digest-matches`                | Skip when the archive sha256 matches and the manifest sha256 matches if the version record has one. `fail` stops the run.  |
 
 `include` and `exclude` accept `#` comments on their own lines.
 
@@ -146,7 +146,7 @@ A checkout's `.git` directory and a local `.env` are dropped while packing. A pr
 
 ### Default excludes
 
-These paths are left out of a packed archive when `default-excludes` is `true`. `include` does not pull a hard-rejected path back in. To pack a test fixture or other soft-excluded path, set `default-excludes: false` and pass the files in `include`. Hard-rejected files still fail the run, so also `exclude` anything you do not want to fail on, such as `.git`.
+These paths are left out of a packed archive when `default-excludes` is `true`. `include` does not pull a hard-rejected path back in. To pack a test fixture or other soft-excluded path, set `default-excludes: false` and pass the files in `include`. Hard-rejected files still fail the run, so also `exclude` anything you do not want to fail on, such as `.git`. The action applies a user `exclude` pattern before `include` and before these defaults. That pattern can drop markdown outside `node_modules`. It drops a path even when `include` names that path.
 
 **Hard-rejected.** A packed tree drops them. A prebuilt archive that contains them fails. An `include` that selects them fails.
 
@@ -162,7 +162,11 @@ These paths are left out of a packed archive when `default-excludes` is `true`. 
 - tests: `__tests__`, `__mocks__`, `test`, `tests`, `coverage`, `.nyc_output`, `.pytest_cache`, `*.test.*`, `*.spec.*`
 - caches: `.cache`, `.turbo`, `.parcel-cache`, `.next/cache`
 - editor and CI metadata: `.github`, `.circleci`, `.gitlab`, `.buildkite`, `.husky`, `.vscode`, `.idea`, `.aws`
+- agent and release directories, at any depth: `.agents`, `.cursor`, `.claude`, `.tegami`, `.changeset`
+- dependency metadata, only when a `node_modules` directory is on the path: `*.d.ts`, `*.map`, `*.md`
 - junk: `.DS_Store`, `Thumbs.db`, `.eslintcache`, `.stylelintcache`, `*.log`, `*.tsbuildinfo`, `*.tar.gz`, `*.tgz`, `.gitmodules`
+
+`*.d.ts`, `*.map`, and `*.md` stay outside `node_modules`. A build or a runtime may import that markdown. The same three names under `node_modules` are soft excludes. `include` does not put them back while `default-excludes` is `true`.
 
 Symlinks are stored as symlinks. That is what pnpm and nub need inside `node_modules`. When the action packs a directory, an absolute symlink whose target stays inside the package root is written into the archive as the equivalent relative symlink. The link on disk is not changed. A symlink that leaves the package root fails the run, and nothing is uploaded. A symlink that points at a forbidden path, such as `.env` or `.git`, fails the same way. A prebuilt archive that contains an absolute symlink also fails. The store the links point at has to be inside `path`.
 

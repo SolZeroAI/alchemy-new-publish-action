@@ -34,7 +34,7 @@ inputs:
     description: Newline-separated gitignore patterns dropped in addition to the default excludes.
     required: false
   default-excludes:
-    description: Drop VCS metadata, secrets, tests, caches, and dev junk before packing. Hard-rejected files still fail the run.
+    description: Drop VCS metadata, secrets, tests, caches, agent directories, and dev junk before packing. Inside node_modules, also drop *.d.ts, *.map, and *.md. Hard-rejected files still fail the run.
     required: false
     default: "true"
   registry-url:

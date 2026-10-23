@@ -12,6 +12,7 @@ const EDITOR_OR_CI = new Set([
   ".vscode",
   ".idea",
 ])
+const AGENT_OR_RELEASE = new Set([".agents", ".cursor", ".claude", ".tegami", ".changeset"])
 const TEST_DIRS = new Set([
   "__tests__",
   "__mocks__",
@@ -77,7 +78,9 @@ export function hardRejectReason(input: string): string | undefined {
 /**
  * Default pack filter. Hard-reject paths are included so a normal checkout
  * drops `.git` and `.env` instead of failing. `.env.example` and
- * `.env.sample` stay. `.pem` inside node_modules stays.
+ * `.env.sample` stay. `.pem` inside node_modules stays. Agent and release
+ * directories are dropped at any depth. Under `node_modules` only, `*.d.ts`,
+ * `*.map`, and `*.md` are dropped.
  */
 export function isDefaultExcluded(input: string): boolean {
   const normalized = normalizeRelPath(input)
@@ -86,6 +89,7 @@ export function isDefaultExcluded(input: string): boolean {
   const parts = normalized.split("/")
   const base = parts[parts.length - 1] ?? normalized
   if (parts.some((part) => EDITOR_OR_CI.has(part))) return true
+  if (parts.some((part) => AGENT_OR_RELEASE.has(part))) return true
   if (parts.some((part) => TEST_DIRS.has(part))) return true
   if (TEST_FILE.test(base)) return true
   if (parts.includes(".cache") || parts.includes(".turbo") || parts.includes(".parcel-cache")) {
@@ -100,5 +104,12 @@ export function isDefaultExcluded(input: string): boolean {
   if (base.endsWith(".log") || base.endsWith(".tsbuildinfo")) return true
   if (base.endsWith(".tar.gz") || base.endsWith(".tgz")) return true
   if (base === ".gitmodules") return true
+  // A build or a runtime may import markdown outside node_modules.
+  if (
+    inNodeModules(parts) &&
+    (base.endsWith(".d.ts") || base.endsWith(".map") || base.endsWith(".md"))
+  ) {
+    return true
+  }
   return false
 }

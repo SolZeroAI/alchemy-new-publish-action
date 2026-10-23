@@ -21714,6 +21714,7 @@ var EDITOR_OR_CI = /* @__PURE__ */ new Set([
   ".vscode",
   ".idea"
 ]);
+var AGENT_OR_RELEASE = /* @__PURE__ */ new Set([".agents", ".cursor", ".claude", ".tegami", ".changeset"]);
 var TEST_DIRS = /* @__PURE__ */ new Set([
   "__tests__",
   "__mocks__",
@@ -21768,6 +21769,7 @@ function isDefaultExcluded(input) {
   const parts = normalized.split("/");
   const base = parts[parts.length - 1] ?? normalized;
   if (parts.some((part) => EDITOR_OR_CI.has(part))) return true;
+  if (parts.some((part) => AGENT_OR_RELEASE.has(part))) return true;
   if (parts.some((part) => TEST_DIRS.has(part))) return true;
   if (TEST_FILE.test(base)) return true;
   if (parts.includes(".cache") || parts.includes(".turbo") || parts.includes(".parcel-cache")) {
@@ -21782,6 +21784,9 @@ function isDefaultExcluded(input) {
   if (base.endsWith(".log") || base.endsWith(".tsbuildinfo")) return true;
   if (base.endsWith(".tar.gz") || base.endsWith(".tgz")) return true;
   if (base === ".gitmodules") return true;
+  if (inNodeModules(parts) && (base.endsWith(".d.ts") || base.endsWith(".map") || base.endsWith(".md"))) {
+    return true;
+  }
   return false;
 }
 
