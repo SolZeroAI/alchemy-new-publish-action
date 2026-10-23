@@ -164,7 +164,7 @@ These paths are left out of a packed archive when `default-excludes` is `true`. 
 - editor and CI metadata: `.github`, `.circleci`, `.gitlab`, `.buildkite`, `.husky`, `.vscode`, `.idea`, `.aws`
 - junk: `.DS_Store`, `Thumbs.db`, `.eslintcache`, `.stylelintcache`, `*.log`, `*.tsbuildinfo`, `*.tar.gz`, `*.tgz`, `.gitmodules`
 
-Symlinks are stored as symlinks. That is what pnpm and nub need inside `node_modules`. A symlink whose target is absolute, or whose normalized target leaves the package root, fails the run and nothing is uploaded. A symlink that points at a forbidden path, such as `.env` or `.git`, fails the same way. The store the links point at has to be inside `path`.
+Symlinks are stored as symlinks. That is what pnpm and nub need inside `node_modules`. When the action packs a directory, an absolute symlink whose target stays inside the package root is written into the archive as the equivalent relative symlink. The link on disk is not changed. A symlink that leaves the package root fails the run, and nothing is uploaded. A symlink that points at a forbidden path, such as `.env` or `.git`, fails the same way. A prebuilt archive that contains an absolute symlink also fails. The store the links point at has to be inside `path`.
 
 Packing writes a temporary `.tar.gz` on disk. File bytes are read and compressed into that file; the archive is not buffered in memory. The sha256 and the multipart upload then read the file back. Archives over 80 MiB produce a warning. Packing stops once the gzip passes 256 MiB, before upload.
 

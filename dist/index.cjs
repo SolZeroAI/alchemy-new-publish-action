@@ -21873,6 +21873,7 @@ var import_node_fs7 = require("node:fs");
 var import_promises3 = require("node:fs/promises");
 var import_node_os = require("node:os");
 var import_node_path11 = require("node:path");
+var import_posix = require("node:path/posix");
 
 // node_modules/minizlib/dist/esm/index.js
 var import_assert = __toESM(require("assert"), 1);
@@ -26180,8 +26181,16 @@ async function packFiles(root, files, destination, options = {}) {
   try {
     for (const relativePath of files) {
       if (failed) throw failed;
-      await assertSymlinkAllowed(root, relativePath);
-      await writePackedEntry(gzip, root, relativePath, linkCache, statCache, () => failed);
+      const archiveLink = await assertSymlinkAllowed(root, relativePath);
+      await writePackedEntry(
+        gzip,
+        root,
+        relativePath,
+        linkCache,
+        statCache,
+        () => failed,
+        archiveLink
+      );
     }
     if (failed) throw failed;
     gzip.end(TAR_EOF);
@@ -26206,19 +26215,49 @@ async function assertSymlinkAllowed(root, relativePath) {
     }
     throw error2;
   }
-  if (!info2.isSymbolicLink()) return;
+  if (!info2.isSymbolicLink()) return void 0;
   const target = await (0, import_promises3.readlink)(absolute);
-  if (!symlinkResolvesInside(relativePath, target)) {
+  const archiveTarget = symlinkArchiveTarget(root, relativePath, target);
+  if (archiveTarget === null) {
     throw new ActionError(`symlink ${relativePath} points outside the package root (${target})`);
   }
-  const resolved = resolvedSymlink(relativePath, target);
-  if (!resolved) return;
+  const resolved = resolvedSymlink(relativePath, archiveTarget);
+  if (!resolved) return archiveTarget;
   const reason = hardRejectReason(resolved);
   if (reason) {
     throw new ActionError(`symlink ${relativePath} points at a forbidden path (${resolved})`);
   }
+  return archiveTarget;
 }
-function writePackedEntry(gzip, root, relativePath, linkCache, statCache, getFailure) {
+function isAbsoluteLinkTarget(target) {
+  return target.startsWith("/") || /^[A-Za-z]:[\\/]/.test(target) || (0, import_node_path11.isAbsolute)(target);
+}
+function symlinkArchiveTarget(root, relativePath, target) {
+  if (!isAbsoluteLinkTarget(target)) {
+    return symlinkResolvesInside(relativePath, target) ? target : null;
+  }
+  return absoluteSymlinkArchiveTarget(root, relativePath, target);
+}
+function absoluteSymlinkArchiveTarget(root, relativePath, target) {
+  if (process.platform !== "win32" && /^[A-Za-z]:[\\/]/.test(target)) return null;
+  const fromRoot = (0, import_node_path11.relative)((0, import_node_path11.resolve)(root), (0, import_node_path11.resolve)(target));
+  if (fromRoot !== "" && (0, import_node_path11.isAbsolute)(fromRoot)) return null;
+  const packageRelative = normalizeRelPath(fromRoot.split(import_node_path11.sep).join("/"));
+  if (packageRelative === null) return null;
+  const slash = relativePath.lastIndexOf("/");
+  const dir = slash === -1 ? "." : relativePath.slice(0, slash);
+  const link = (0, import_posix.relative)(dir, packageRelative === "" ? "." : packageRelative);
+  const archiveTarget = link === "" ? "." : link;
+  if (!symlinkResolvesInside(relativePath, archiveTarget)) return null;
+  const resolved = resolvedSymlink(relativePath, archiveTarget);
+  if (packageRelative === "") {
+    if (resolved !== "") return null;
+  } else if (resolved !== packageRelative) {
+    return null;
+  }
+  return archiveTarget;
+}
+function writePackedEntry(gzip, root, relativePath, linkCache, statCache, getFailure, archiveLink) {
   return new Promise((resolve2, reject) => {
     const existing = getFailure();
     if (existing) {
@@ -26232,7 +26271,12 @@ function writePackedEntry(gzip, root, relativePath, linkCache, statCache, getFai
       strict: true,
       linkCache,
       statCache,
-      maxReadSize: PACK_READ_BYTES
+      maxReadSize: PACK_READ_BYTES,
+      onWriteEntry(packed) {
+        if (archiveLink !== void 0 && packed.type === "SymbolicLink") {
+          packed.linkpath = archiveLink;
+        }
+      }
     });
     let settled = false;
     const settle = (error2) => {
