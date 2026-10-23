@@ -47,7 +47,7 @@ export function renderSummary(info: SummaryInfo): string {
   const result = info.dryRun
     ? "Dry run. Nothing was uploaded."
     : info.skipped
-      ? "Skipped. This version is already published with the same digests."
+      ? "The publish was skipped. This version is already published with the same digests."
       : "Published."
   const lines = [
     "## alchemy.new publish",

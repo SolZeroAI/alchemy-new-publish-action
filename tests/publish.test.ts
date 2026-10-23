@@ -130,6 +130,7 @@ describe("publish", () => {
 
   it("skips a publish when the stored digest matches", async () => {
     const pkg = await makePackage()
+    const summaries: string[] = []
     try {
       const dry = await publish({
         path: pkg.root,
@@ -186,11 +187,88 @@ describe("publish", () => {
         client,
         token: "anr_test",
         mask: () => {},
+        writeSummary: async (markdown) => {
+          summaries.push(markdown)
+        },
       })
       assert.equal(result.skipped, true)
       assert.equal(result.sha256, dry.sha256)
       assert.equal(result.manifestSha256, dry.manifestSha256)
       assert.equal(started, false)
+      const summary = summaries[0] ?? ""
+      assert.match(summary, /\| Result \| The publish was skipped\./)
+      assert.match(summary, /already published with the same digests/)
+      assert.doesNotMatch(summary, /\| Result \| Published\./)
+    } finally {
+      await pkg.cleanup()
+    }
+  })
+
+  it("fails a matching publish when on-immutable is fail", async () => {
+    const pkg = await makePackage()
+    const summaries: string[] = []
+    try {
+      const dry = await publish({
+        path: pkg.root,
+        version: "1.2.3",
+        include: [],
+        exclude: [],
+        defaultExcludes: true,
+        registryUrl: "https://alchemy.new",
+        dryRun: true,
+        onImmutable: "fail",
+      })
+      const client: RegistryClient = {
+        setToken() {},
+        async exchangeOidc() {
+          throw new Error("exchange")
+        },
+        async getVersion() {
+          return {
+            org: "example-org",
+            project: "example-stack",
+            version: "1.2.3",
+            sha256: dry.sha256,
+            sizeBytes: dry.sizeBytes,
+            manifestSha256: dry.manifestSha256,
+            yanked: false,
+          }
+        },
+        async startUpload() {
+          throw new Error("should not start")
+        },
+        async uploadPart() {
+          throw new Error("part")
+        },
+        async uploadManifest() {
+          throw new Error("manifest")
+        },
+        async completeUpload() {
+          throw new Error("complete")
+        },
+        async abortUpload() {},
+      }
+      await assert.rejects(
+        () =>
+          publish({
+            path: pkg.root,
+            version: "1.2.3",
+            include: [],
+            exclude: [],
+            defaultExcludes: true,
+            registryUrl: "https://alchemy.new",
+            dryRun: false,
+            onImmutable: "fail",
+            client,
+            token: "anr_test",
+            mask: () => {},
+            writeSummary: async (markdown) => {
+              summaries.push(markdown)
+            },
+          }),
+        /already published with the same archive sha256/,
+      )
+      assert.equal(summaries.length, 0)
     } finally {
       await pkg.cleanup()
     }
@@ -198,6 +276,7 @@ describe("publish", () => {
 
   it("names a digest mismatch instead of uploading", async () => {
     const pkg = await makePackage()
+    const summaries: string[] = []
     try {
       const client: RegistryClient = {
         setToken() {},
@@ -242,9 +321,13 @@ describe("publish", () => {
             client,
             token: "anr_test",
             mask: () => {},
+            writeSummary: async (markdown) => {
+              summaries.push(markdown)
+            },
           }),
         /does not match this archive/,
       )
+      assert.equal(summaries.length, 0)
     } finally {
       await pkg.cleanup()
     }

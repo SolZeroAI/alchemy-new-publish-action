@@ -48,9 +48,9 @@ inputs:
     required: false
     default: "false"
   on-immutable:
-    description: "When the version is already published: fail, or skip-if-digest-matches. Skip compares the archive sha256 and, when the version record includes it, the manifest sha256."
+    description: "When the version is already published. skip-if-digest-matches (default) succeeds when the archive sha256 matches and, when the version record includes it, the manifest sha256 matches. fail stops the run. A different digest still fails."
     required: false
-    default: fail
+    default: skip-if-digest-matches
 outputs:
   version:
     description: Published version, without a leading v.
