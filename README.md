@@ -94,22 +94,22 @@ Paste an `anr_` token only. An `anu_` grant cannot be pasted into `token`. The a
 
 ## Inputs
 
-| Input              | Default                                 | Description                                                                                                               |
-| ------------------ | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `package`          | manifest `source`                       | `org/project`. Must match `alchemy.new.jsonc`.                                                                            |
-| `org`              | manifest `source.org`                   | Registry org. Must match the manifest when both are set.                                                                  |
-| `project`          | manifest `source.project`               | Registry project. Must match the manifest when both are set.                                                              |
-| `version`          | git tag, then `source.version`          | Exact semver without build metadata. A tag `v1.2.3` becomes `1.2.3`.                                                      |
-| `archive`          |                                         | Prebuilt `.tar.gz` whose root is the package root. Mutually exclusive with `path`.                                        |
-| `path`             | workspace, when `archive` is omitted    | Directory to pack.                                                                                                        |
-| `manifest`         | `alchemy.new.jsonc` at the package root | Raw manifest file. Uploaded separately. Comments are kept. At most 256 KB.                                                |
-| `include`          | pack the directory                      | Newline-separated gitignore patterns. Only matching paths are considered.                                                 |
-| `exclude`          |                                         | Extra gitignore patterns, dropped in addition to the defaults.                                                            |
-| `default-excludes` | `true`                                  | Drop VCS metadata, secrets, tests, caches, agent directories, and dev junk. In node_modules, drop *.d.ts, *.map, and *.md.|
-| `registry-url`     | `https://api.alchemy.new`               | API origin. The action appends `/v1/...`. Pre is `https://api-pre.alchemy.new`.                                           |
-| `token`            | OIDC exchange                           | `anr_` API token.                                                                                                         |
-| `dry-run`          | `false`                                 | Validate and write the summary. Do not call the registry.                                                                 |
-| `on-immutable`     | `skip-if-digest-matches`                | Skip when the archive sha256 matches and the manifest sha256 matches if the version record has one. `fail` stops the run. |
+| Input              | Default                                 | Description                                                                                                                |
+| ------------------ | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `package`          | manifest `source`                       | `org/project`. Must match `alchemy.new.jsonc`.                                                                             |
+| `org`              | manifest `source.org`                   | Registry org. Must match the manifest when both are set.                                                                   |
+| `project`          | manifest `source.project`               | Registry project. Must match the manifest when both are set.                                                               |
+| `version`          | git tag, then `source.version`          | Exact semver without build metadata. A tag `v1.2.3` becomes `1.2.3`.                                                       |
+| `archive`          |                                         | Prebuilt `.tar.gz` whose root is the package root. Mutually exclusive with `path`.                                         |
+| `path`             | workspace, when `archive` is omitted    | Directory to pack.                                                                                                         |
+| `manifest`         | `alchemy.new.jsonc` at the package root | Raw manifest file. Uploaded separately. Comments are kept. At most 256 KB.                                                 |
+| `include`          | pack the directory                      | Newline-separated gitignore patterns. Only matching paths are considered.                                                  |
+| `exclude`          |                                         | Extra gitignore patterns, dropped in addition to the defaults.                                                             |
+| `default-excludes` | `true`                                  | Drop VCS metadata, secrets, tests, caches, agent directories, and dev junk. In node_modules, drop *.d.ts, *.map, and *.md. |
+| `registry-url`     | `https://api.alchemy.new`               | API origin. The action appends `/v1/...`. Pre is `https://api-pre.alchemy.new`.                                            |
+| `token`            | OIDC exchange                           | `anr_` API token.                                                                                                          |
+| `dry-run`          | `false`                                 | Validate and write the summary. Do not call the registry.                                                                  |
+| `on-immutable`     | `skip-if-digest-matches`                | Skip when the archive sha256 matches and the manifest sha256 matches if the version record has one. `fail` stops the run.  |
 
 `include` and `exclude` accept `#` comments on their own lines.
 
