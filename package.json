@@ -12,6 +12,7 @@
     "format:fix": "oxfmt",
     "lint": "NODE_OPTIONS='--import tsx' oxlint",
     "lint:fix": "NODE_OPTIONS='--import tsx' oxlint --fix",
+    "prepare": "node scripts/link-vscode-tsrs.mjs",
     "test": "node --import tsx --test tests/**/*.test.ts",
     "tegami": "tsx scripts/tegami.mts",
     "typecheck": "tsrs --noEmit"
