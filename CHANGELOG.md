@@ -1,3 +1,9 @@
+## alchemy-new-publish-action@1.0.2
+
+### What changed
+
+The 1.0.1 release failed to download on runners because of a dangling tracked symlink. That symlink is removed.
+
 ## alchemy-new-publish-action@1.0.1
 
 ### Alchemy package links
