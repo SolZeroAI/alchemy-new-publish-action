@@ -7,3 +7,4 @@ coverage/
 !.env.example
 dist/*.map
 *.tsbuildinfo
+.vscode/tsrs/
