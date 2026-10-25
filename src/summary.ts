@@ -17,6 +17,7 @@ interface SummaryInfo {
   excluded: string[]
   excludedCount: number
   overRecommended: boolean
+  droppedTargetWarning?: string
 }
 
 const LIST_CAP = 200
@@ -61,10 +62,11 @@ export function renderSummary(info: SummaryInfo): string {
     `| Package | \`${escapeMd(info.org)}/${escapeMd(info.project)}\` |`,
     `| Version | \`${escapeMd(info.version)}\` |`,
     `| Size | ${formatBytes(info.sizeBytes)} (${info.sizeBytes} bytes) |`,
+    `| size-bytes | ${info.sizeBytes} |`,
     `| sha256 | \`${info.sha256}\` |`,
     `| Manifest sha256 | \`${info.manifestSha256}\` |`,
     `| Manifest | Uploaded separately. \`alchemy.new.jsonc\` is not in the archive. |`,
-    `| Files | ${info.fileCount} |`,
+    `| file-count | ${info.fileCount} |`,
     `| Result | ${result} |`,
     `| Deploy URL | ${info.url} |`,
     `| Registry | ${info.registryUrl} |`,
@@ -81,8 +83,13 @@ export function renderSummary(info: SummaryInfo): string {
     listBlock("Packed files", info.files, info.fileCount),
     "",
     listBlock("Excluded", info.excluded, info.excludedCount),
-    "",
   )
+
+  if (info.droppedTargetWarning) {
+    lines.push("", "### Excluded package targets", "", info.droppedTargetWarning)
+  }
+
+  lines.push("")
 
   return lines.join("\n")
 }

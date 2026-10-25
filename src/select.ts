@@ -4,7 +4,13 @@ import { join } from "node:path"
 import ignore from "ignore"
 import { ALCHEMY_PACKAGE_PATH } from "./constants.ts"
 import { ActionError } from "./errors.ts"
-import { packageRelativeTarget, relativeArchiveLink, symlinkProblem } from "./links.ts"
+import {
+  packageRelativeTarget,
+  relativeArchiveLink,
+  symlinkArchiveTarget,
+  symlinkProblem,
+  type OutsideSymlink,
+} from "./links.ts"
 import { normalizeRelPath } from "./paths.ts"
 import { hardRejectReason, isDefaultExcluded } from "./rules.ts"
 
@@ -20,6 +26,10 @@ interface Selection {
   links: Map<string, string>
   excluded: string[]
   excludedCount: number
+  /** Every path exclude rules removed, including paths past the summary sample. */
+  excludedPaths: Set<string>
+  /** Symlinks whose link text leaves the package root. The target was not followed. */
+  outsideLinks: OutsideSymlink[]
   rejected: Array<{ path: string; reason: string }>
 }
 
@@ -105,13 +115,20 @@ export async function selectFiles(root: string, options: SelectOptions): Promise
   const files: string[] = []
   const links = new Map<string, string>()
   const excluded: string[] = []
+  const excludedPaths = new Set<string>()
   let excludedCount = 0
+  const outsideLinks: OutsideSymlink[] = []
   const rejected: Array<{ path: string; reason: string }> = []
 
   const noteExcluded = (rel: string): void => {
     excludedCount += 1
+    excludedPaths.add(rel)
 
     if (excluded.length < EXCLUDED_SAMPLE) excluded.push(rel)
+  }
+
+  const noteOutside = (path: string, target: string): void => {
+    outsideLinks.push({ path, target })
   }
 
   const noteRejected = (path: string, reason: string): void => {
@@ -141,7 +158,7 @@ export async function selectFiles(root: string, options: SelectOptions): Promise
         const resolved = packageRelativeTarget(root, real, target)
 
         if (resolved === null) {
-          noteRejected(logical, `symlink ${logical} points outside the package root (${target})`)
+          noteOutside(logical, target)
           continue
         }
 
@@ -189,7 +206,7 @@ export async function selectFiles(root: string, options: SelectOptions): Promise
     const resolved = packageRelativeTarget(root, rel, target)
 
     if (resolved === null) {
-      noteRejected(rel, `symlink ${rel} points outside the package root (${target})`)
+      noteOutside(rel, target)
 
       return true
     }
@@ -244,6 +261,14 @@ export async function selectFiles(root: string, options: SelectOptions): Promise
 
       if (entry.isSymbolicLink()) {
         if (rel === ALCHEMY_PACKAGE_PATH && (await expandAlchemyLink(rel))) continue
+        const target = await readlink(join(root, rel))
+
+        // Link text only. Do not stat or walk a target that leaves the package.
+        if (symlinkArchiveTarget(root, rel, target) === null) {
+          noteOutside(rel, target)
+          continue
+        }
+
         files.push(rel)
         continue
       }
@@ -265,5 +290,5 @@ export async function selectFiles(root: string, options: SelectOptions): Promise
   await walk("")
   files.sort()
 
-  return { files, links, excluded, excludedCount, rejected }
+  return { files, links, excluded, excludedCount, excludedPaths, outsideLinks, rejected }
 }
