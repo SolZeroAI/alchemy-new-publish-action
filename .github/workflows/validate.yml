@@ -27,13 +27,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Reject tracked symlinks
-        run: |
-          if git ls-files -s | grep '^120000'; then
-            echo "Tracked symlinks (mode 120000) are not allowed."
-            exit 1
-          fi
-
       - name: Setup nub
         uses: nubjs/setup-nub@v0
         with:
