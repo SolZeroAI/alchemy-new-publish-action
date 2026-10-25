@@ -25,6 +25,7 @@ jobs:
       github.event.workflow_run.head_branch == 'master' &&
       github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-24.04
+    environment: release
     timeout-minutes: 15
     permissions:
       contents: write
