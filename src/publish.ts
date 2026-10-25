@@ -16,6 +16,8 @@ import { parseManifest, type Manifest } from "./manifest.ts"
 import { resolvePackage } from "./package-ref.ts"
 import { normalizeRelPath } from "./paths.ts"
 import { resolveVersion } from "./semver.ts"
+import { formatOutsideSymlinkFailure } from "./links.ts"
+import { droppedPackageTargets, formatDroppedPackageTargets } from "./package-targets.ts"
 import { selectFiles } from "./select.ts"
 import {
   assertGzip,
@@ -72,6 +74,8 @@ interface PublishResult {
   sha256: string
   manifestSha256: string
   sizeBytes: number
+  /** File and symlink members in the archive that was built. */
+  fileCount: number
   url: string
   dryRun: boolean
   skipped: boolean
@@ -190,6 +194,9 @@ export async function publish(options: PublishOptions): Promise<PublishResult> {
     excluded: prepared.excluded,
     excludedCount: prepared.excludedCount,
     overRecommended: sizeBytes > RECOMMENDED_ARCHIVE_BYTES,
+    ...(prepared.droppedTargetWarning
+      ? { droppedTargetWarning: prepared.droppedTargetWarning }
+      : {}),
   })
 
   if (options.dryRun) {
@@ -202,6 +209,7 @@ export async function publish(options: PublishOptions): Promise<PublishResult> {
       sha256,
       manifestSha256: loaded.sha256,
       sizeBytes,
+      fileCount: files.length,
       url,
       dryRun: true,
       skipped: false,
@@ -275,6 +283,9 @@ export async function publish(options: PublishOptions): Promise<PublishResult> {
     excluded: prepared.excluded,
     excludedCount: prepared.excludedCount,
     overRecommended: sizeBytes > RECOMMENDED_ARCHIVE_BYTES,
+    ...(prepared.droppedTargetWarning
+      ? { droppedTargetWarning: prepared.droppedTargetWarning }
+      : {}),
   })
   await options.writeSummary?.(finalMarkdown)
 
@@ -285,6 +296,7 @@ export async function publish(options: PublishOptions): Promise<PublishResult> {
     sha256,
     manifestSha256: loaded.sha256,
     sizeBytes,
+    fileCount: files.length,
     url,
     dryRun: false,
     skipped: outcome.skipped,
@@ -295,6 +307,7 @@ interface PreparedArchive {
   archivePath: string
   excluded: string[]
   excludedCount: number
+  droppedTargetWarning?: string
   /** Set when the directory packer already read the manifest. Prebuilt archives load it after safety checks. */
   loaded?: LoadedManifest
 }
@@ -315,11 +328,17 @@ async function prepareDirectory(options: PublishOptions, log: Logger): Promise<P
     excludes: options.exclude,
     defaultExcludes: options.defaultExcludes,
   })
+  if (selection.outsideLinks.length > 0) {
+    throw new ActionError(formatOutsideSymlinkFailure(selection.outsideLinks))
+  }
   if (selection.rejected.length > 0) {
     const lines = selection.rejected.slice(0, 20).map((item) => `${item.path}: ${item.reason}`)
     throw new ActionError(`Refusing to pack forbidden files:\n${lines.join("\n")}`)
   }
   const files = filesForArchive(selection.files, manifestRelative)
+  const dropped = await droppedPackageTargets(directory, files, selection.excludedPaths)
+  const droppedTargetWarning = formatDroppedPackageTargets(dropped)
+  if (droppedTargetWarning) log.warn(droppedTargetWarning)
   const links = new Map<string, string>()
   for (const file of files) {
     const target = selection.links.get(file)
@@ -342,6 +361,7 @@ async function prepareDirectory(options: PublishOptions, log: Logger): Promise<P
     archivePath,
     excluded: [...selection.excluded, ...omitted],
     excludedCount: selection.excludedCount + omitted.length,
+    ...(droppedTargetWarning ? { droppedTargetWarning } : {}),
     loaded,
   }
 }

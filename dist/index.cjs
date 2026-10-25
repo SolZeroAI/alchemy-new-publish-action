@@ -21328,8 +21328,8 @@ function redactingLogger(logger) {
 
 // src/publish.ts
 var import_node_crypto3 = require("node:crypto");
-var import_promises5 = require("node:fs/promises");
-var import_node_path14 = require("node:path");
+var import_promises6 = require("node:fs/promises");
+var import_node_path15 = require("node:path");
 
 // src/bytes.ts
 function formatBytes(bytes) {
@@ -21697,11 +21697,6 @@ function resolvePackage(input) {
   return { org, project };
 }
 
-// src/select.ts
-var import_promises = require("node:fs/promises");
-var import_node_path2 = require("node:path");
-var import_ignore = __toESM(require_ignore(), 1);
-
 // src/links.ts
 var import_node_path = require("node:path");
 var import_posix = require("node:path/posix");
@@ -21834,6 +21829,28 @@ function absoluteSymlinkArchiveTarget(root, relativePath, target) {
   }
   return archiveTarget;
 }
+var OUTSIDE_SYMLINK_LIST_LIMIT = 20;
+function byPath(left, right) {
+  if (left.path < right.path) return -1;
+  if (left.path > right.path) return 1;
+  return 0;
+}
+function formatOutsideSymlinkFailure(links) {
+  const unique = /* @__PURE__ */ new Map();
+  for (const link of links) {
+    if (!unique.has(link.path)) unique.set(link.path, link);
+  }
+  const sorted = [...unique.values()].sort(byPath);
+  const shown = sorted.slice(0, OUTSIDE_SYMLINK_LIST_LIMIT);
+  const noun = sorted.length === 1 ? "symlink points" : "symlinks point";
+  const lines = [
+    `${sorted.length} ${noun} outside the package root. The archive stores the link text and does not follow the link. nub's global virtual store can create such links. Set NPM_CONFIG_ENABLE_GLOBAL_VIRTUAL_STORE=false on install to keep the store inside the project.`,
+    ...shown.map((link) => `symlink ${link.path} points outside the package root (${link.target})`)
+  ];
+  const extra = sorted.length - shown.length;
+  if (extra > 0) lines.push(`And ${extra} more.`);
+  return lines.join("\n");
+}
 function symlinkProblem(fromPath, target) {
   if (!symlinkResolvesInside(fromPath, target)) {
     return `symlink ${fromPath} points outside the package root (${target})`;
@@ -21847,7 +21864,164 @@ function symlinkProblem(fromPath, target) {
   return void 0;
 }
 
+// src/package-targets.ts
+var import_promises = require("node:fs/promises");
+var import_node_path2 = require("node:path");
+var DROPPED_TARGET_LIMIT = 20;
+function packageDirOfPackedManifest(relativePath) {
+  if (relativePath === "package.json") return "";
+  const parts = relativePath.split("/");
+  if (parts[parts.length - 1] !== "package.json") return null;
+  const nodeModulesAt = parts.lastIndexOf("node_modules");
+  if (nodeModulesAt < 0) return null;
+  const nameParts = parts.slice(nodeModulesAt + 1, -1);
+  const unscoped = nameParts[0];
+  if (nameParts.length === 1 && unscoped && !unscoped.startsWith("@")) {
+    return parts.slice(0, -1).join("/");
+  }
+  const scope = nameParts[0];
+  const name = nameParts[1];
+  if (nameParts.length === 2 && scope && scope.startsWith("@") && scope.length > 1 && name) {
+    return parts.slice(0, -1).join("/");
+  }
+  return null;
+}
+function appendField(parent, key) {
+  if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) return `${parent}.${key}`;
+  return `${parent}[${JSON.stringify(key)}]`;
+}
+function walkTarget(field, value, out) {
+  if (typeof value === "string") {
+    if (value !== "") out.push({ field, spec: value });
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (let index = 0; index < value.length; index += 1) {
+      const child = value[index];
+      walkTarget(`${field}[${index}]`, child, out);
+    }
+    return;
+  }
+  if (!isRecord(value)) return;
+  for (const [key, child] of Object.entries(value)) {
+    walkTarget(appendField(field, key), child, out);
+  }
+}
+function collectDeclaredTargets(manifest) {
+  const targets = [];
+  const main = stringField(manifest, "main");
+  if (main) targets.push({ field: "main", spec: main });
+  const moduleSpec = stringField(manifest, "module");
+  if (moduleSpec) targets.push({ field: "module", spec: moduleSpec });
+  walkTarget("bin", manifest.bin, targets);
+  walkTarget("exports", manifest.exports, targets);
+  return targets;
+}
+function resolvePackageTarget(packageDir, spec) {
+  if (spec.includes("*") || spec.includes("\0") || spec.includes("\n") || spec.includes("\r")) {
+    return null;
+  }
+  if (spec.startsWith("#") || spec.includes("://")) return null;
+  if (spec.endsWith("/")) return null;
+  let relativeSpec = spec.replace(/\\/g, "/");
+  if (relativeSpec.startsWith("./")) relativeSpec = relativeSpec.slice(2);
+  if (relativeSpec.startsWith("/") || /^[A-Za-z]:/.test(relativeSpec)) return null;
+  if (relativeSpec === "" || relativeSpec === ".") return null;
+  const joined = packageDir === "" ? relativeSpec : `${packageDir}/${relativeSpec}`;
+  return normalizeRelPath(joined);
+}
+function excludedPathCovers(relativePath, excluded) {
+  if (excluded.has(relativePath)) return true;
+  let slash = relativePath.lastIndexOf("/");
+  while (slash > 0) {
+    const parent = relativePath.slice(0, slash);
+    if (excluded.has(parent)) return true;
+    slash = parent.lastIndexOf("/");
+  }
+  return false;
+}
+function packageLabel(packageDir, manifest) {
+  const dir = packageDir === "" ? "." : packageDir;
+  const name = stringField(manifest, "name");
+  if (name && !/[\r\n]/.test(name)) return `${name} (${dir})`;
+  return dir;
+}
+function byDroppedPath(left, right) {
+  if (left.path < right.path) return -1;
+  if (left.path > right.path) return 1;
+  if (left.packageLabel < right.packageLabel) return -1;
+  if (left.packageLabel > right.packageLabel) return 1;
+  return 0;
+}
+function parseJson(text) {
+  const value = JSON.parse(text);
+  return value;
+}
+async function droppedPackageTargets(root, packedFiles, excluded) {
+  if (excluded.size === 0) return [];
+  const packed = new Set(packedFiles);
+  const grouped = /* @__PURE__ */ new Map();
+  for (const relativePath of packedFiles) {
+    const packageDir = packageDirOfPackedManifest(relativePath);
+    if (packageDir === null) continue;
+    const absolute = (0, import_node_path2.join)(root, relativePath);
+    let text;
+    try {
+      const info2 = await (0, import_promises.lstat)(absolute);
+      if (info2.isSymbolicLink()) {
+        const target = await (0, import_promises.readlink)(absolute);
+        if (symlinkArchiveTarget(root, relativePath, target) === null) continue;
+      } else if (!info2.isFile()) {
+        continue;
+      }
+      text = await (0, import_promises.readFile)(absolute, "utf8");
+    } catch {
+      continue;
+    }
+    let parsed;
+    try {
+      parsed = parseJson(text);
+    } catch {
+      continue;
+    }
+    if (!isRecord(parsed)) continue;
+    const label = packageLabel(packageDir, parsed);
+    for (const target of collectDeclaredTargets(parsed)) {
+      const resolved = resolvePackageTarget(packageDir, target.spec);
+      if (resolved === null || packed.has(resolved)) continue;
+      if (!excludedPathCovers(resolved, excluded)) continue;
+      const key = `${label}\0${resolved}`;
+      const existing = grouped.get(key);
+      if (existing) {
+        if (!existing.fields.includes(target.field)) existing.fields.push(target.field);
+        continue;
+      }
+      grouped.set(key, { packageLabel: label, fields: [target.field], path: resolved });
+    }
+  }
+  const items = [...grouped.values()];
+  for (const item of items) item.fields.sort();
+  items.sort(byDroppedPath);
+  return items;
+}
+function formatDroppedPackageTargets(items) {
+  if (items.length === 0) return void 0;
+  const sorted = [...items].sort(byDroppedPath);
+  const shown = sorted.slice(0, DROPPED_TARGET_LIMIT);
+  const header = sorted.length === 1 ? "1 package target points at a file that exclude patterns or default excludes removed. The archive omits that file. Packing continues." : `${sorted.length} package targets point at files that exclude patterns or default excludes removed. The archive omits those files. Packing continues.`;
+  const lines = [
+    header,
+    ...shown.map((item) => `${item.packageLabel} ${item.fields.join(", ")} dropped ${item.path}`)
+  ];
+  const extra = sorted.length - shown.length;
+  if (extra > 0) lines.push(`And ${extra} more.`);
+  return lines.join("\n");
+}
+
 // src/select.ts
+var import_promises2 = require("node:fs/promises");
+var import_node_path3 = require("node:path");
+var import_ignore = __toESM(require_ignore(), 1);
 function matcher(patterns, label) {
   if (patterns.length === 0) return { ignores: () => false };
   try {
@@ -21896,17 +22070,23 @@ async function selectFiles(root, options) {
   const files = [];
   const links = /* @__PURE__ */ new Map();
   const excluded = [];
+  const excludedPaths = /* @__PURE__ */ new Set();
   let excludedCount = 0;
+  const outsideLinks = [];
   const rejected = [];
   const noteExcluded = (rel) => {
     excludedCount += 1;
+    excludedPaths.add(rel);
     if (excluded.length < EXCLUDED_SAMPLE) excluded.push(rel);
+  };
+  const noteOutside = (path, target) => {
+    outsideLinks.push({ path, target });
   };
   const noteRejected = (path, reason) => {
     rejected.push({ path, reason });
   };
   async function walkLinked(realDir, logicalDir) {
-    const entries = await (0, import_promises.readdir)((0, import_node_path2.join)(root, realDir), { withFileTypes: true });
+    const entries = await (0, import_promises2.readdir)((0, import_node_path3.join)(root, realDir), { withFileTypes: true });
     for (const entry of entries) {
       const logical = `${logicalDir}/${entry.name}`;
       const real = `${realDir}/${entry.name}`;
@@ -21920,10 +22100,10 @@ async function selectFiles(root, options) {
         continue;
       }
       if (entry.isSymbolicLink()) {
-        const target = await (0, import_promises.readlink)((0, import_node_path2.join)(root, real));
+        const target = await (0, import_promises2.readlink)((0, import_node_path3.join)(root, real));
         const resolved = packageRelativeTarget(root, real, target);
         if (resolved === null) {
-          noteRejected(logical, `symlink ${logical} points outside the package root (${target})`);
+          noteOutside(logical, target);
           continue;
         }
         const reason = hardRejectReason(resolved);
@@ -21956,10 +22136,10 @@ async function selectFiles(root, options) {
     links.set(logical, target);
   }
   async function expandAlchemyLink(rel) {
-    const target = await (0, import_promises.readlink)((0, import_node_path2.join)(root, rel));
+    const target = await (0, import_promises2.readlink)((0, import_node_path3.join)(root, rel));
     const resolved = packageRelativeTarget(root, rel, target);
     if (resolved === null) {
-      noteRejected(rel, `symlink ${rel} points outside the package root (${target})`);
+      noteOutside(rel, target);
       return true;
     }
     if (resolved === rel || resolved.startsWith(`${rel}/`)) {
@@ -21968,7 +22148,7 @@ async function selectFiles(root, options) {
     }
     let info2;
     try {
-      info2 = await (0, import_promises.stat)((0, import_node_path2.join)(root, resolved));
+      info2 = await (0, import_promises2.stat)((0, import_node_path3.join)(root, resolved));
     } catch (error2) {
       const code = fsErrorCode(error2);
       if (code === "ENOENT") return false;
@@ -21983,8 +22163,8 @@ async function selectFiles(root, options) {
     return true;
   }
   async function walk(relDir) {
-    const absolute = relDir === "" ? root : (0, import_node_path2.join)(root, relDir);
-    const entries = await (0, import_promises.readdir)(absolute, { withFileTypes: true });
+    const absolute = relDir === "" ? root : (0, import_node_path3.join)(root, relDir);
+    const entries = await (0, import_promises2.readdir)(absolute, { withFileTypes: true });
     for (const entry of entries) {
       const rel = relDir === "" ? entry.name : `${relDir}/${entry.name}`;
       const decision = classifyPath(rel, options, includes, excludes);
@@ -21998,6 +22178,11 @@ async function selectFiles(root, options) {
       }
       if (entry.isSymbolicLink()) {
         if (rel === ALCHEMY_PACKAGE_PATH && await expandAlchemyLink(rel)) continue;
+        const target = await (0, import_promises2.readlink)((0, import_node_path3.join)(root, rel));
+        if (symlinkArchiveTarget(root, rel, target) === null) {
+          noteOutside(rel, target);
+          continue;
+        }
         files.push(rel);
         continue;
       }
@@ -22014,15 +22199,15 @@ async function selectFiles(root, options) {
   }
   await walk("");
   files.sort();
-  return { files, links, excluded, excludedCount, rejected };
+  return { files, links, excluded, excludedCount, excludedPaths, outsideLinks, rejected };
 }
 
 // src/archive.ts
 var import_node_crypto2 = require("node:crypto");
 var import_node_fs7 = require("node:fs");
-var import_promises3 = require("node:fs/promises");
+var import_promises4 = require("node:fs/promises");
 var import_node_os = require("node:os");
-var import_node_path12 = require("node:path");
+var import_node_path13 = require("node:path");
 
 // node_modules/minizlib/dist/esm/index.js
 var import_assert = __toESM(require("assert"), 1);
@@ -23259,7 +23444,7 @@ var import_fs2 = __toESM(require("fs"), 1);
 var import_node_events2 = require("node:events");
 var import_node_stream2 = __toESM(require("node:stream"), 1);
 var import_node_string_decoder2 = require("node:string_decoder");
-var import_node_path3 = __toESM(require("node:path"), 1);
+var import_node_path4 = __toESM(require("node:path"), 1);
 var import_node_fs = __toESM(require("node:fs"), 1);
 var import_path = require("path");
 var import_events2 = require("events");
@@ -23267,27 +23452,27 @@ var import_assert2 = __toESM(require("assert"), 1);
 var import_buffer2 = require("buffer");
 var Ps = __toESM(require("zlib"), 1);
 var import_zlib2 = __toESM(require("zlib"), 1);
-var import_node_path4 = require("node:path");
 var import_node_path5 = require("node:path");
+var import_node_path6 = require("node:path");
 var import_fs3 = __toESM(require("fs"), 1);
 var import_fs4 = __toESM(require("fs"), 1);
 var import_path2 = __toESM(require("path"), 1);
-var import_node_path6 = require("node:path");
+var import_node_path7 = require("node:path");
 var import_path3 = __toESM(require("path"), 1);
 var import_node_fs2 = __toESM(require("node:fs"), 1);
 var import_node_assert = __toESM(require("node:assert"), 1);
 var import_node_crypto = require("node:crypto");
 var import_node_fs3 = __toESM(require("node:fs"), 1);
-var import_node_path7 = __toESM(require("node:path"), 1);
+var import_node_path8 = __toESM(require("node:path"), 1);
 var import_fs5 = __toESM(require("fs"), 1);
 var import_node_fs4 = __toESM(require("node:fs"), 1);
-var import_node_path8 = __toESM(require("node:path"), 1);
-var import_node_fs5 = __toESM(require("node:fs"), 1);
-var import_promises2 = __toESM(require("node:fs/promises"), 1);
 var import_node_path9 = __toESM(require("node:path"), 1);
-var import_node_path10 = require("node:path");
+var import_node_fs5 = __toESM(require("node:fs"), 1);
+var import_promises3 = __toESM(require("node:fs/promises"), 1);
+var import_node_path10 = __toESM(require("node:path"), 1);
+var import_node_path11 = require("node:path");
 var import_node_fs6 = __toESM(require("node:fs"), 1);
-var import_node_path11 = __toESM(require("node:path"), 1);
+var import_node_path12 = __toESM(require("node:path"), 1);
 var zr = Object.defineProperty;
 var Ur = (s3, t) => {
   for (var e in t) zr(s3, e, { get: t[e], enumerable: true });
@@ -24181,12 +24366,12 @@ var F = class {
   }
 };
 var mn = (s3, t) => {
-  let i = s3, r = "", n, o = import_node_path4.posix.parse(s3).root || ".";
+  let i = s3, r = "", n, o = import_node_path5.posix.parse(s3).root || ".";
   if (Buffer.byteLength(i) < 100) n = [i, r, false];
   else {
-    r = import_node_path4.posix.dirname(i), i = import_node_path4.posix.basename(i);
+    r = import_node_path5.posix.dirname(i), i = import_node_path5.posix.basename(i);
     do
-      Buffer.byteLength(i) <= 100 && Buffer.byteLength(r) <= t ? n = [i, r, false] : Buffer.byteLength(i) > 100 && Buffer.byteLength(r) <= t ? n = [i.slice(0, 99), r, true] : (i = import_node_path4.posix.join(import_node_path4.posix.basename(r), i), r = import_node_path4.posix.dirname(r));
+      Buffer.byteLength(i) <= 100 && Buffer.byteLength(r) <= t ? n = [i, r, false] : Buffer.byteLength(i) > 100 && Buffer.byteLength(r) <= t ? n = [i.slice(0, 99), r, true] : (i = import_node_path5.posix.join(import_node_path5.posix.basename(r), i), r = import_node_path5.posix.dirname(r));
     while (r !== o && n === void 0);
     n || (n = [s3.slice(0, 99), "", true]);
   }
@@ -24232,7 +24417,7 @@ var ft = class s {
     if (t === "") return Buffer.allocUnsafe(0);
     let e = Buffer.byteLength(t), i = 512 * Math.ceil(1 + e / 512), r = Buffer.allocUnsafe(i);
     for (let n = 0; n < 512; n++) r[n] = 0;
-    new F({ path: ("PaxHeader/" + (0, import_node_path5.basename)(this.path ?? "")).slice(0, 99), mode: this.mode || 420, uid: this.uid, gid: this.gid, size: e, mtime: this.mtime, type: this.global ? "GlobalExtendedHeader" : "ExtendedHeader", linkpath: "", uname: this.uname || "", gname: this.gname || "", devmaj: 0, devmin: 0, atime: this.atime, ctime: this.ctime }).encode(r), r.write(t, 512, e, "utf8");
+    new F({ path: ("PaxHeader/" + (0, import_node_path6.basename)(this.path ?? "")).slice(0, 99), mode: this.mode || 420, uid: this.uid, gid: this.gid, size: e, mtime: this.mtime, type: this.global ? "GlobalExtendedHeader" : "ExtendedHeader", linkpath: "", uname: this.uname || "", gname: this.gname || "", devmaj: 0, devmin: 0, atime: this.atime, ctime: this.ctime }).encode(r), r.write(t, 512, e, "utf8");
     for (let n = e + 512; n < r.length; n++) r[n] = 0;
     return r;
   }
@@ -24695,7 +24880,7 @@ var Ct = K(Mn, Bn, (s3) => new rt(s3), (s3) => new rt(s3), (s3, t) => {
   t?.length && Qi(s3, t), s3.noResume || vn(s3);
 });
 var Ji = (s3, t, e) => (s3 &= 4095, e && (s3 = (s3 | 384) & -19), t && (s3 & 256 && (s3 |= 64), s3 & 32 && (s3 |= 8), s3 & 4 && (s3 |= 1)), s3);
-var { isAbsolute: zn, parse: qs } = import_node_path6.win32;
+var { isAbsolute: zn, parse: qs } = import_node_path7.win32;
 var ce = (s3) => {
   let t = "", e = qs(s3);
   for (; zn(s3) || e.root; ) {
@@ -25404,11 +25589,11 @@ var $n = (s3, t) => {
 };
 var fr = (s3, t) => {
   t.forEach((e) => {
-    e.charAt(0) === "@" ? Ct({ file: import_node_path3.default.resolve(s3.cwd, e.slice(1)), sync: true, noResume: true, onReadEntry: (i) => s3.add(i) }) : s3.add(e);
+    e.charAt(0) === "@" ? Ct({ file: import_node_path4.default.resolve(s3.cwd, e.slice(1)), sync: true, noResume: true, onReadEntry: (i) => s3.add(i) }) : s3.add(e);
   }), s3.end();
 };
 var dr = async (s3, t) => {
-  for (let e of t) e.charAt(0) === "@" ? await Ct({ file: import_node_path3.default.resolve(String(s3.cwd), e.slice(1)), noResume: true, onReadEntry: (i) => {
+  for (let e of t) e.charAt(0) === "@" ? await Ct({ file: import_node_path4.default.resolve(String(s3.cwd), e.slice(1)), noResume: true, onReadEntry: (i) => {
     s3.add(i);
   } }) : s3.add(e);
   s3.end();
@@ -25446,13 +25631,13 @@ var Ei = (s3, t, e, i) => {
   });
 };
 var io = (s3, t, e, i, r) => {
-  if (t.isDirectory()) Es(import_node_path8.default.resolve(s3, t.name), e, i, (n) => {
+  if (t.isDirectory()) Es(import_node_path9.default.resolve(s3, t.name), e, i, (n) => {
     if (n) return r(n);
-    let o = import_node_path8.default.resolve(s3, t.name);
+    let o = import_node_path9.default.resolve(s3, t.name);
     Ei(o, e, i, r);
   });
   else {
-    let n = import_node_path8.default.resolve(s3, t.name);
+    let n = import_node_path9.default.resolve(s3, t.name);
     Ei(n, e, i, r);
   }
 };
@@ -25473,7 +25658,7 @@ var Es = (s3, t, e, i) => {
   });
 };
 var so = (s3, t, e, i) => {
-  t.isDirectory() && ws(import_node_path8.default.resolve(s3, t.name), e, i), ps(import_node_path8.default.resolve(s3, t.name), e, i);
+  t.isDirectory() && ws(import_node_path9.default.resolve(s3, t.name), e, i), ps(import_node_path9.default.resolve(s3, t.name), e, i);
 };
 var ws = (s3, t, e) => {
   let i;
@@ -25522,13 +25707,13 @@ var gr = (s3, t, e) => {
     E ? e(E) : x && a ? Es(x, o, h, (Le) => y(Le)) : n ? import_node_fs5.default.chmod(s3, r, e) : e();
   };
   if (s3 === d) return no(s3, y);
-  if (l) return import_promises2.default.mkdir(s3, { mode: r, recursive: true }).then((E) => y(null, E ?? void 0), y);
-  let D = f(import_node_path9.default.relative(d, s3)).split("/");
+  if (l) return import_promises3.default.mkdir(s3, { mode: r, recursive: true }).then((E) => y(null, E ?? void 0), y);
+  let D = f(import_node_path10.default.relative(d, s3)).split("/");
   Ss(d, D, r, c, d, void 0, y);
 };
 var Ss = (s3, t, e, i, r, n, o) => {
   if (t.length === 0) return o(null, n);
-  let h = t.shift(), a = f(import_node_path9.default.resolve(s3 + "/" + h));
+  let h = t.shift(), a = f(import_node_path10.default.resolve(s3 + "/" + h));
   import_node_fs5.default.mkdir(a, e, br(a, t, e, i, r, n, o));
 };
 var br = (s3, t, e, i, r, n, o) => (h) => {
@@ -25562,9 +25747,9 @@ var _r = (s3, t) => {
   };
   if (s3 === c) return oo(c), d();
   if (a) return d(import_node_fs5.default.mkdirSync(s3, { mode: i, recursive: true }) ?? void 0);
-  let T = f(import_node_path9.default.relative(c, s3)).split("/"), D;
+  let T = f(import_node_path10.default.relative(c, s3)).split("/"), D;
   for (let E = T.shift(), x = c; E && (x += "/" + E); E = T.shift()) {
-    x = f(import_node_path9.default.resolve(x));
+    x = f(import_node_path10.default.resolve(x));
     try {
       import_node_fs5.default.mkdirSync(x, i), D = D || x;
     } catch {
@@ -25593,14 +25778,14 @@ var ho = process.env.TESTING_TAR_FAKE_PLATFORM || process.platform;
 var ao = ho === "win32";
 var lo = (s3) => s3.split("/").slice(0, -1).reduce((e, i) => {
   let r = e.at(-1);
-  return r !== void 0 && (i = (0, import_node_path10.join)(r, i)), e.push(i || "/"), e;
+  return r !== void 0 && (i = (0, import_node_path11.join)(r, i)), e.push(i || "/"), e;
 }, []);
 var yi = class {
   #t = /* @__PURE__ */ new Map();
   #i = /* @__PURE__ */ new Map();
   #s = /* @__PURE__ */ new Set();
   reserve(t, e) {
-    t = ao ? ["win32 parallelization disabled"] : t.map((r) => mt((0, import_node_path10.join)(Tr(r))));
+    t = ao ? ["win32 parallelization disabled"] : t.map((r) => mt((0, import_node_path11.join)(Tr(r))));
     let i = new Set(t.map((r) => lo(r)).reduce((r, n) => r.concat(n)));
     this.#i.set(e, { dirs: i, paths: t });
     for (let r of t) {
@@ -25740,7 +25925,7 @@ var Xt = class extends rt {
       if (t.preserveOwner) throw new TypeError("cannot preserve owner in archive and also set owner explicitly");
       this.uid = t.uid, this.gid = t.gid, this.setOwner = true;
     } else this.uid = void 0, this.gid = void 0, this.setOwner = false;
-    this.preserveOwner = t.preserveOwner === void 0 && typeof t.uid != "number" ? process.getuid?.() === 0 : !!t.preserveOwner, this.processUid = (this.preserveOwner || this.setOwner) && process.getuid ? process.getuid() : void 0, this.processGid = (this.preserveOwner || this.setOwner) && process.getgid ? process.getgid() : void 0, this.maxDepth = typeof t.maxDepth == "number" ? t.maxDepth : uo, this.forceChown = t.forceChown === true, this.win32 = !!t.win32 || Te, this.newer = !!t.newer, this.keep = !!t.keep, this.noMtime = !!t.noMtime, this.preservePaths = !!t.preservePaths, this.unlink = !!t.unlink, this.cwd = f(import_node_path7.default.resolve(t.cwd || process.cwd())), this.strip = Number(t.strip) || 0, this.processUmask = this.chmod ? typeof t.processUmask == "number" ? t.processUmask : Lr() : 0, this.umask = typeof t.umask == "number" ? t.umask : this.processUmask, this.dmode = t.dmode || 511 & ~this.umask, this.fmode = t.fmode || 438 & ~this.umask, this.on("entry", (e) => this[Dr](e));
+    this.preserveOwner = t.preserveOwner === void 0 && typeof t.uid != "number" ? process.getuid?.() === 0 : !!t.preserveOwner, this.processUid = (this.preserveOwner || this.setOwner) && process.getuid ? process.getuid() : void 0, this.processGid = (this.preserveOwner || this.setOwner) && process.getgid ? process.getgid() : void 0, this.maxDepth = typeof t.maxDepth == "number" ? t.maxDepth : uo, this.forceChown = t.forceChown === true, this.win32 = !!t.win32 || Te, this.newer = !!t.newer, this.keep = !!t.keep, this.noMtime = !!t.noMtime, this.preservePaths = !!t.preservePaths, this.unlink = !!t.unlink, this.cwd = f(import_node_path8.default.resolve(t.cwd || process.cwd())), this.strip = Number(t.strip) || 0, this.processUmask = this.chmod ? typeof t.processUmask == "number" ? t.processUmask : Lr() : 0, this.umask = typeof t.umask == "number" ? t.umask : this.processUmask, this.dmode = t.dmode || 511 & ~this.umask, this.fmode = t.fmode || 438 & ~this.umask, this.on("entry", (e) => this[Dr](e));
   }
   warn(t, e, i = {}) {
     return (t === "TAR_BAD_ARCHIVE" || t === "TAR_ABORT") && (i.recoverable = false), super.warn(t, e, i);
@@ -25754,7 +25939,7 @@ var Xt = class extends rt {
     let [n, o] = ce(i), h = o.replaceAll(/\\/g, "/").split("/");
     if (h.includes("..") || Te && /^[a-z]:\.\.$/i.test(h[0] ?? "")) {
       if (e === "path" || r === "Link") return this.warn("TAR_ENTRY_ERROR", `${e} contains '..'`, { entry: t, [e]: i }), false;
-      let a = import_node_path7.default.posix.dirname(t.path), l = import_node_path7.default.posix.normalize(import_node_path7.default.posix.join(a, h.join("/")));
+      let a = import_node_path8.default.posix.dirname(t.path), l = import_node_path8.default.posix.normalize(import_node_path8.default.posix.join(a, h.join("/")));
       if (l.startsWith("../") || l === "..") return this.warn("TAR_ENTRY_ERROR", `${e} escapes extraction directory`, { entry: t, [e]: i }), false;
     }
     return n && (t[e] = String(o), this.warn("TAR_ENTRY_INFO", `stripping ${n} from absolute ${e}`, { entry: t, [e]: i })), true;
@@ -25772,12 +25957,12 @@ var Xt = class extends rt {
     }
     if (isFinite(this.maxDepth) && i.length > this.maxDepth) return this.warn("TAR_ENTRY_ERROR", "path excessively deep", { entry: t, path: e, depth: i.length, maxDepth: this.maxDepth }), false;
     if (!this[Rs](t, "path") || !this[Rs](t, "linkpath")) return false;
-    if (t.absolute = import_node_path7.default.isAbsolute(t.path) ? f(import_node_path7.default.resolve(t.path)) : f(import_node_path7.default.resolve(this.cwd, t.path)), !this.preservePaths && typeof t.absolute == "string" && t.absolute.indexOf(this.cwd + "/") !== 0 && t.absolute !== this.cwd) return this.warn("TAR_ENTRY_ERROR", "path escaped extraction target", { entry: t, path: f(t.path), resolvedPath: t.absolute, cwd: this.cwd }), false;
+    if (t.absolute = import_node_path8.default.isAbsolute(t.path) ? f(import_node_path8.default.resolve(t.path)) : f(import_node_path8.default.resolve(this.cwd, t.path)), !this.preservePaths && typeof t.absolute == "string" && t.absolute.indexOf(this.cwd + "/") !== 0 && t.absolute !== this.cwd) return this.warn("TAR_ENTRY_ERROR", "path escaped extraction target", { entry: t, path: f(t.path), resolvedPath: t.absolute, cwd: this.cwd }), false;
     if (t.absolute === this.cwd && t.type !== "Directory" && t.type !== "GNUDumpDir") return false;
     if (this.win32) {
-      let { root: r } = import_node_path7.default.win32.parse(String(t.absolute));
+      let { root: r } = import_node_path8.default.win32.parse(String(t.absolute));
       t.absolute = r + ts(String(t.absolute).slice(r.length));
-      let { root: n } = import_node_path7.default.win32.parse(t.path);
+      let { root: n } = import_node_path8.default.win32.parse(t.path);
       t.path = n + ts(t.path.slice(n.length));
     }
     return true;
@@ -25865,13 +26050,13 @@ var Xt = class extends rt {
     t.unsupported = true, this.warn("TAR_ENTRY_UNSUPPORTED", `unsupported entry type: ${t.type}`, { entry: t }), t.resume();
   }
   [Ar](t, e) {
-    let i = f(import_node_path7.default.relative(this.cwd, import_node_path7.default.resolve(import_node_path7.default.dirname(String(t.absolute)), String(t.linkpath)))).split("/");
+    let i = f(import_node_path8.default.relative(this.cwd, import_node_path8.default.resolve(import_node_path8.default.dirname(String(t.absolute)), String(t.linkpath)))).split("/");
     this[Re](t, this.cwd, i, () => this[gi](t, String(t.linkpath), "symlink", e), (r) => {
       this[O](r, t), e();
     });
   }
   [Ir](t, e) {
-    let i = f(import_node_path7.default.resolve(this.cwd, String(t.linkpath))), r = f(String(t.linkpath)).split("/");
+    let i = f(import_node_path8.default.resolve(this.cwd, String(t.linkpath))), r = f(String(t.linkpath)).split("/");
     this[Re](t, this.cwd, r, () => this[gi](t, i, "link", e), (n) => {
       this[O](n, t), e();
     });
@@ -25879,10 +26064,10 @@ var Xt = class extends rt {
   [Re](t, e, i, r, n) {
     let o = i.shift();
     if (this.preservePaths || o === void 0) return r();
-    let h = import_node_path7.default.resolve(e, o);
+    let h = import_node_path8.default.resolve(e, o);
     import_node_fs3.default.lstat(h, (a, l) => {
       if (a) return r();
-      if (l?.isSymbolicLink()) return n(new St(h, import_node_path7.default.resolve(h, i.join("/"))));
+      if (l?.isSymbolicLink()) return n(new St(h, import_node_path8.default.resolve(h, i.join("/"))));
       this[Re](t, h, i, r, n);
     });
   }
@@ -25916,7 +26101,7 @@ var Xt = class extends rt {
       });
     }, n = () => {
       if (t.absolute !== this.cwd) {
-        let h = f(import_node_path7.default.dirname(String(t.absolute)));
+        let h = f(import_node_path8.default.dirname(String(t.absolute)));
         if (h !== this.cwd) return this[yt](h, this.dmode, (a) => {
           if (a) {
             this[O](a, t), i();
@@ -25991,7 +26176,7 @@ var xe = class extends Xt {
       this[Oe] = true;
     }
     if (t.absolute !== this.cwd) {
-      let n = f(import_node_path7.default.dirname(String(t.absolute)));
+      let n = f(import_node_path8.default.dirname(String(t.absolute)));
       if (n !== this.cwd) {
         let o = this[yt](n, this.dmode);
         if (o) return this[O](o, t);
@@ -26091,10 +26276,10 @@ var xe = class extends Xt {
     if (this.preservePaths || i.length === 0) return r();
     let o = e;
     for (let h of i) {
-      o = import_node_path7.default.resolve(o, h);
+      o = import_node_path8.default.resolve(o, h);
       let [a, l] = ye(() => import_node_fs3.default.lstatSync(o));
       if (a) return r();
-      if (l.isSymbolicLink()) return n(new St(o, import_node_path7.default.resolve(e, i.join("/"))));
+      if (l.isSymbolicLink()) return n(new St(o, import_node_path8.default.resolve(e, i.join("/"))));
     }
     r();
   }
@@ -26198,11 +26383,11 @@ var go = (s3, t) => {
 };
 var bo = (s3, t) => {
   t.forEach((e) => {
-    e.charAt(0) === "@" ? Ct({ file: import_node_path11.default.resolve(s3.cwd, e.slice(1)), sync: true, noResume: true, onReadEntry: (i) => s3.add(i) }) : s3.add(e);
+    e.charAt(0) === "@" ? Ct({ file: import_node_path12.default.resolve(s3.cwd, e.slice(1)), sync: true, noResume: true, onReadEntry: (i) => s3.add(i) }) : s3.add(e);
   }), s3.end();
 };
 var _o = async (s3, t) => {
-  for (let e of t) e.charAt(0) === "@" ? await Ct({ file: import_node_path11.default.resolve(String(s3.cwd), e.slice(1)), noResume: true, onReadEntry: (i) => s3.add(i) }) : s3.add(e);
+  for (let e of t) e.charAt(0) === "@" ? await Ct({ file: import_node_path12.default.resolve(String(s3.cwd), e.slice(1)), noResume: true, onReadEntry: (i) => s3.add(i) }) : s3.add(e);
   s3.end();
 };
 var vt = K(yo, go, () => {
@@ -26232,7 +26417,7 @@ function entryType(type) {
   return "other";
 }
 async function assertGzip(filePath) {
-  const handle = await (0, import_promises3.open)(filePath, "r");
+  const handle = await (0, import_promises4.open)(filePath, "r");
   try {
     const buf = Buffer.alloc(2);
     const { bytesRead } = await handle.read(buf, 0, 2, 0);
@@ -26246,7 +26431,7 @@ async function assertGzip(filePath) {
   }
 }
 async function fileSize(filePath) {
-  const info2 = await (0, import_promises3.stat)(filePath);
+  const info2 = await (0, import_promises4.stat)(filePath);
   if (!info2.isFile()) throw new ActionError(`Archive path is not a file: ${filePath}`);
   return info2.size;
 }
@@ -26281,19 +26466,114 @@ async function listArchive(archivePath) {
 }
 var PACK_READ_BYTES = 256 * 1024;
 var TAR_EOF = Buffer.alloc(1024);
+async function planPackEntries(root, files, links) {
+  const outside = [];
+  let forbidden;
+  let missing;
+  const planned = [];
+  for (const relativePath of files) {
+    const preset = links?.get(relativePath);
+    if (preset !== void 0) {
+      if (symlinkArchiveTarget(root, relativePath, preset) === null) {
+        outside.push({ path: relativePath, target: preset });
+        continue;
+      }
+      const problem = symlinkProblem(relativePath, preset);
+      if (problem) {
+        if (!forbidden) forbidden = problem;
+        continue;
+      }
+      planned.push({
+        relativePath,
+        sourcePath: (0, import_node_path13.join)(root, relativePath),
+        archiveLink: preset,
+        materialize: true
+      });
+      continue;
+    }
+    const inspected = await inspectPackedPath(root, relativePath);
+    if (inspected.kind === "outside") {
+      outside.push(inspected.link);
+      continue;
+    }
+    if (inspected.kind === "forbidden") {
+      if (!forbidden) forbidden = inspected.message;
+      continue;
+    }
+    if (inspected.kind === "missing") {
+      if (!missing) missing = inspected.message;
+      continue;
+    }
+    planned.push(inspected.entry);
+  }
+  if (outside.length > 0) throw new ActionError(formatOutsideSymlinkFailure(outside));
+  if (forbidden) throw new ActionError(forbidden);
+  if (missing) throw new ActionError(missing);
+  if (planned.length === 0) {
+    throw new ActionError("Nothing to pack. The include and exclude rules removed every file.");
+  }
+  return planned;
+}
+async function inspectPackedPath(root, relativePath) {
+  const absolute = (0, import_node_path13.join)(root, relativePath);
+  let info2;
+  try {
+    info2 = await (0, import_promises4.lstat)(absolute);
+  } catch (error2) {
+    const code = typeof error2 === "object" && error2 && "code" in error2 ? String(error2.code) : "";
+    if (code === "ENOENT") {
+      return {
+        kind: "missing",
+        message: `Cannot pack ${relativePath}: the file is missing.`
+      };
+    }
+    throw error2;
+  }
+  if (!info2.isSymbolicLink()) {
+    return {
+      kind: "file",
+      entry: { relativePath, sourcePath: absolute, materialize: false }
+    };
+  }
+  const target = await (0, import_promises4.readlink)(absolute);
+  const archiveTarget = symlinkArchiveTarget(root, relativePath, target);
+  if (archiveTarget === null) {
+    return { kind: "outside", link: { path: relativePath, target } };
+  }
+  const resolved = resolvedSymlink(relativePath, archiveTarget);
+  if (resolved) {
+    const reason = hardRejectReason(resolved);
+    if (reason) {
+      return {
+        kind: "forbidden",
+        message: `symlink ${relativePath} points at a forbidden path (${resolved})`
+      };
+    }
+  }
+  return {
+    kind: "file",
+    entry: {
+      relativePath,
+      sourcePath: absolute,
+      archiveLink: archiveTarget,
+      materialize: false
+    }
+  };
+}
 async function packFiles(root, files, destination, options = {}) {
   if (files.length === 0) {
     throw new ActionError("Nothing to pack. The include and exclude rules removed every file.");
   }
+  const planned = await planPackEntries(root, files, options.links);
   const maxBytes = options.maxBytes ?? MAX_ARCHIVE_BYTES;
-  await (0, import_promises3.mkdir)((0, import_node_path12.dirname)(destination), { recursive: true });
+  await (0, import_promises4.mkdir)((0, import_node_path13.dirname)(destination), { recursive: true });
   let scratch;
   let scratchCount = 0;
   const materializeLink = async (linkTarget) => {
-    scratch ??= await (0, import_promises3.mkdtemp)((0, import_node_path12.join)((0, import_node_path12.dirname)(destination), "alchemy-links-"));
-    const source = (0, import_node_path12.join)(scratch, String(scratchCount));
+    scratch ??= await (0, import_promises4.mkdtemp)((0, import_node_path13.join)((0, import_node_path13.dirname)(destination), "alchemy-links-"));
+    const source = (0, import_node_path13.join)(scratch, String(scratchCount));
     scratchCount += 1;
-    await (0, import_promises3.symlink)(linkTarget, source);
+    await (0, import_promises4.symlink)(linkTarget, source);
     return source;
   };
   const gzip = new Gzip({ portable: true });
@@ -26338,35 +26618,24 @@ async function packFiles(root, files, destination, options = {}) {
   });
   try {
     try {
-      for (const relativePath of files) {
+      for (const item of planned) {
         if (failed) throw failed;
-        const linkTarget = options.links?.get(relativePath);
-        if (linkTarget !== void 0) {
-          const problem = symlinkProblem(relativePath, linkTarget);
-          if (problem) throw new ActionError(problem);
-          const source = await materializeLink(linkTarget);
-          await writePackedEntry(
-            gzip,
-            root,
-            relativePath,
-            linkCache,
-            statCache,
-            () => failed,
-            source,
-            linkTarget
-          );
-          continue;
+        let source = item.sourcePath;
+        if (item.materialize) {
+          if (item.archiveLink === void 0) {
+            throw new ActionError(`Internal error: missing link text for ${item.relativePath}.`);
+          }
+          source = await materializeLink(item.archiveLink);
         }
-        const archiveLink = await assertSymlinkAllowed(root, relativePath);
         await writePackedEntry(
           gzip,
           root,
-          relativePath,
+          item.relativePath,
           linkCache,
           statCache,
           () => failed,
-          (0, import_node_path12.join)(root, relativePath),
-          archiveLink
+          source,
+          item.archiveLink
         );
       }
       if (failed) throw failed;
@@ -26376,38 +26645,12 @@ async function packFiles(root, files, destination, options = {}) {
     } catch (error2) {
       const cause = fail(error2);
       await closed;
-      await (0, import_promises3.rm)(destination, { force: true });
+      await (0, import_promises4.rm)(destination, { force: true });
       throw cause;
     }
   } finally {
-    if (scratch) await (0, import_promises3.rm)(scratch, { recursive: true, force: true });
+    if (scratch) await (0, import_promises4.rm)(scratch, { recursive: true, force: true });
   }
-}
-async function assertSymlinkAllowed(root, relativePath) {
-  const absolute = (0, import_node_path12.join)(root, relativePath);
-  let info2;
-  try {
-    info2 = await (0, import_promises3.lstat)(absolute);
-  } catch (error2) {
-    const code = typeof error2 === "object" && error2 && "code" in error2 ? String(error2.code) : "";
-    if (code === "ENOENT") {
-      throw new ActionError(`Cannot pack ${relativePath}: the file is missing.`);
-    }
-    throw error2;
-  }
-  if (!info2.isSymbolicLink()) return void 0;
-  const target = await (0, import_promises3.readlink)(absolute);
-  const archiveTarget = symlinkArchiveTarget(root, relativePath, target);
-  if (archiveTarget === null) {
-    throw new ActionError(`symlink ${relativePath} points outside the package root (${target})`);
-  }
-  const resolved = resolvedSymlink(relativePath, archiveTarget);
-  if (!resolved) return archiveTarget;
-  const reason = hardRejectReason(resolved);
-  if (reason) {
-    throw new ActionError(`symlink ${relativePath} points at a forbidden path (${resolved})`);
-  }
-  return archiveTarget;
 }
 function writePackedEntry(gzip, root, relativePath, linkCache, statCache, getFailure, sourcePath, archiveLink) {
   return new Promise((resolve3, reject) => {
@@ -26480,8 +26723,8 @@ function writePackedEntry(gzip, root, relativePath, linkCache, statCache, getFai
 }
 async function tempArchivePath() {
   const base = process.env.RUNNER_TEMP || (0, import_node_os.tmpdir)();
-  const dir = await (0, import_promises3.mkdtemp)((0, import_node_path12.join)(base, "alchemy-new-"));
-  return (0, import_node_path12.join)(dir, "alchemy.new.tar.gz");
+  const dir = await (0, import_promises4.mkdtemp)((0, import_node_path13.join)(base, "alchemy-new-"));
+  return (0, import_node_path13.join)(dir, "alchemy.new.tar.gz");
 }
 function memberMap(entries) {
   const files = /* @__PURE__ */ new Map();
@@ -26492,7 +26735,7 @@ function memberMap(entries) {
 }
 async function pathExists(filePath) {
   try {
-    const info2 = await (0, import_promises3.stat)(filePath);
+    const info2 = await (0, import_promises4.stat)(filePath);
     return info2.isFile() || info2.isSymbolicLink();
   } catch {
     return false;
@@ -26500,7 +26743,7 @@ async function pathExists(filePath) {
 }
 
 // src/validate.ts
-var import_node_path13 = require("node:path");
+var import_node_path14 = require("node:path");
 function assertArchiveSize(sizeBytes, cap = MAX_ARCHIVE_BYTES) {
   if (sizeBytes <= 0) {
     throw new ActionError("Archive is empty.");
@@ -26582,7 +26825,7 @@ async function assertPresent(root, relativePath, selected, links, label) {
     }
     return;
   }
-  if (await pathExists((0, import_node_path13.join)(root, relativePath))) {
+  if (await pathExists((0, import_node_path14.join)(root, relativePath))) {
     throw new ActionError(
       `${label} (${relativePath}) is in the package directory but the include/exclude rules dropped it.`
     );
@@ -26734,7 +26977,7 @@ function createRegistryClient(options) {
         log,
         sleepFn
       );
-      const body = parseJson(response.text, "OIDC exchange");
+      const body = parseJson2(response.text, "OIDC exchange");
       const grant = stringField(body, "token");
       const expiresAt = stringField(body, "expiresAt");
       if (!grant || !expiresAt) {
@@ -26762,7 +27005,7 @@ function createRegistryClient(options) {
         sleepFn
       );
       if (response.status === 404) return void 0;
-      return parseVersionRecord(parseJson(response.text, "version lookup"), org, project, version);
+      return parseVersionRecord(parseJson2(response.text, "version lookup"), org, project, version);
     },
     async startUpload(org, project, version) {
       const path = `${packageVersionPath(org, project, version)}/uploads`;
@@ -26778,7 +27021,7 @@ function createRegistryClient(options) {
         log,
         sleepFn
       );
-      const body = parseJson(response.text, "start upload");
+      const body = parseJson2(response.text, "start upload");
       const uploadId = stringField(body, "uploadId");
       const partSize = body.partSize;
       const maxBytes = body.maxBytes;
@@ -26819,7 +27062,7 @@ function createRegistryClient(options) {
         log,
         sleepFn
       );
-      const body = parseJson(response.text, `part ${input.partNumber}`);
+      const body = parseJson2(response.text, `part ${input.partNumber}`);
       const etag = stringField(body, "etag");
       if (!etag) {
         throw new RegistryError(`Part ${input.partNumber} returned no etag.`, 200);
@@ -26846,7 +27089,7 @@ function createRegistryClient(options) {
         log,
         sleepFn
       );
-      const body = parseJson(response.text, "manifest upload");
+      const body = parseJson2(response.text, "manifest upload");
       const sha256 = stringField(body, "sha256") ?? "";
       const sizeBytes = typeof body.sizeBytes === "number" ? body.sizeBytes : input.body.length;
       const contentType = stringField(body, "contentType");
@@ -26877,7 +27120,7 @@ function createRegistryClient(options) {
         sleepFn
       );
       return parseVersionRecord(
-        parseJson(response.text, "complete upload"),
+        parseJson2(response.text, "complete upload"),
         input.org,
         input.project,
         input.version
@@ -26892,7 +27135,7 @@ function createRegistryClient(options) {
     }
   };
 }
-function parseJson(text, label) {
+function parseJson2(text, label) {
   try {
     const value = JSON.parse(text);
     if (!isRecord(value)) throw new Error("response was not a JSON object");
@@ -27023,7 +27266,7 @@ async function authorize(options) {
 }
 
 // src/upload.ts
-var import_promises4 = require("node:fs/promises");
+var import_promises5 = require("node:fs/promises");
 function resolvePartSize(fileSize2, serverPartSize) {
   if (!Number.isInteger(serverPartSize) || serverPartSize <= 0) {
     throw new ActionError(`Registry returned an invalid partSize (${String(serverPartSize)}).`);
@@ -27228,7 +27471,7 @@ async function sendManifest(options, uploadId) {
   );
 }
 async function sendParts(options, uploadId, lengths) {
-  const handle = await (0, import_promises4.open)(options.archivePath, "r");
+  const handle = await (0, import_promises5.open)(options.archivePath, "r");
   try {
     const parts = [];
     let offset = 0;
@@ -27296,10 +27539,11 @@ function renderSummary(info2) {
     `| Package | \`${escapeMd(info2.org)}/${escapeMd(info2.project)}\` |`,
     `| Version | \`${escapeMd(info2.version)}\` |`,
     `| Size | ${formatBytes(info2.sizeBytes)} (${info2.sizeBytes} bytes) |`,
+    `| size-bytes | ${info2.sizeBytes} |`,
     `| sha256 | \`${info2.sha256}\` |`,
     `| Manifest sha256 | \`${info2.manifestSha256}\` |`,
     `| Manifest | Uploaded separately. \`alchemy.new.jsonc\` is not in the archive. |`,
-    `| Files | ${info2.fileCount} |`,
+    `| file-count | ${info2.fileCount} |`,
     `| Result | ${result} |`,
     `| Deploy URL | ${info2.url} |`,
     `| Registry | ${info2.registryUrl} |`
@@ -27313,9 +27557,12 @@ function renderSummary(info2) {
     "",
     listBlock("Packed files", info2.files, info2.fileCount),
     "",
-    listBlock("Excluded", info2.excluded, info2.excludedCount),
-    ""
+    listBlock("Excluded", info2.excluded, info2.excludedCount)
   );
+  if (info2.droppedTargetWarning) {
+    lines.push("", "### Excluded package targets", "", info2.droppedTargetWarning);
+  }
+  lines.push("");
   return lines.join("\n");
 }
 function deployUrl(org, project, version) {
@@ -27331,10 +27578,10 @@ function omittedFromArchive(file, manifestRelative) {
   return manifestRelative !== void 0 && !manifestRelative.includes("/") && file === manifestRelative;
 }
 function resolveManifestFile(options) {
-  const packageDirectory = options.archive ? void 0 : (0, import_node_path14.resolve)(options.path ?? options.workspace ?? process.cwd());
-  const base = packageDirectory ?? (0, import_node_path14.resolve)(options.workspace ?? process.cwd());
-  if (!options.manifest) return (0, import_node_path14.join)(base, MANIFEST_FILENAME);
-  return (0, import_node_path14.isAbsolute)(options.manifest) ? options.manifest : (0, import_node_path14.resolve)(base, options.manifest);
+  const packageDirectory = options.archive ? void 0 : (0, import_node_path15.resolve)(options.path ?? options.workspace ?? process.cwd());
+  const base = packageDirectory ?? (0, import_node_path15.resolve)(options.workspace ?? process.cwd());
+  if (!options.manifest) return (0, import_node_path15.join)(base, MANIFEST_FILENAME);
+  return (0, import_node_path15.isAbsolute)(options.manifest) ? options.manifest : (0, import_node_path15.resolve)(base, options.manifest);
 }
 async function publish(options) {
   const log = options.log ?? silentLogger;
@@ -27348,7 +27595,7 @@ async function publish(options) {
   if (options.archive && options.path) {
     throw new ActionError("Pass either archive or path, not both.");
   }
-  const prepared = options.archive ? await preparePrebuilt((0, import_node_path14.resolve)(options.archive), log) : await prepareDirectory(options, log);
+  const prepared = options.archive ? await preparePrebuilt((0, import_node_path15.resolve)(options.archive), log) : await prepareDirectory(options, log);
   const sizeBytes = await fileSize(prepared.archivePath);
   assertArchiveSize(sizeBytes);
   if (sizeBytes > RECOMMENDED_ARCHIVE_BYTES) {
@@ -27402,7 +27649,8 @@ async function publish(options) {
     files,
     excluded: prepared.excluded,
     excludedCount: prepared.excludedCount,
-    overRecommended: sizeBytes > RECOMMENDED_ARCHIVE_BYTES
+    overRecommended: sizeBytes > RECOMMENDED_ARCHIVE_BYTES,
+    ...prepared.droppedTargetWarning ? { droppedTargetWarning: prepared.droppedTargetWarning } : {}
   });
   if (options.dryRun) {
     await options.writeSummary?.(markdown);
@@ -27414,6 +27662,7 @@ async function publish(options) {
       sha256,
       manifestSha256: loaded.sha256,
       sizeBytes,
+      fileCount: files.length,
       url,
       dryRun: true,
       skipped: false
@@ -27479,7 +27728,8 @@ async function publish(options) {
     files,
     excluded: prepared.excluded,
     excludedCount: prepared.excludedCount,
-    overRecommended: sizeBytes > RECOMMENDED_ARCHIVE_BYTES
+    overRecommended: sizeBytes > RECOMMENDED_ARCHIVE_BYTES,
+    ...prepared.droppedTargetWarning ? { droppedTargetWarning: prepared.droppedTargetWarning } : {}
   });
   await options.writeSummary?.(finalMarkdown);
   return {
@@ -27489,6 +27739,7 @@ async function publish(options) {
     sha256,
     manifestSha256: loaded.sha256,
     sizeBytes,
+    fileCount: files.length,
     url,
     dryRun: false,
     skipped: outcome.skipped
@@ -27499,7 +27750,7 @@ async function preparePrebuilt(archivePath, log) {
   return { archivePath, excluded: [], excludedCount: 0 };
 }
 async function prepareDirectory(options, log) {
-  const directory = (0, import_node_path14.resolve)(options.path ?? options.workspace ?? process.cwd());
+  const directory = (0, import_node_path15.resolve)(options.path ?? options.workspace ?? process.cwd());
   log.info(`Packing ${directory}.`);
   const manifestFile = resolveManifestFile(options);
   const loaded = await loadManifest(manifestFile);
@@ -27509,12 +27760,18 @@ async function prepareDirectory(options, log) {
     excludes: options.exclude,
     defaultExcludes: options.defaultExcludes
   });
+  if (selection.outsideLinks.length > 0) {
+    throw new ActionError(formatOutsideSymlinkFailure(selection.outsideLinks));
+  }
   if (selection.rejected.length > 0) {
     const lines = selection.rejected.slice(0, 20).map((item) => `${item.path}: ${item.reason}`);
     throw new ActionError(`Refusing to pack forbidden files:
 ${lines.join("\n")}`);
   }
   const files = filesForArchive(selection.files, manifestRelative);
+  const dropped = await droppedPackageTargets(directory, files, selection.excludedPaths);
+  const droppedTargetWarning = formatDroppedPackageTargets(dropped);
+  if (droppedTargetWarning) log.warn(droppedTargetWarning);
   const links = /* @__PURE__ */ new Map();
   for (const file of files) {
     const target = selection.links.get(file);
@@ -27537,13 +27794,14 @@ ${lines.join("\n")}`);
     archivePath,
     excluded: [...selection.excluded, ...omitted],
     excludedCount: selection.excludedCount + omitted.length,
+    ...droppedTargetWarning ? { droppedTargetWarning } : {},
     loaded
   };
 }
 async function loadManifest(manifestPath) {
   let bytes;
   try {
-    bytes = await (0, import_promises5.readFile)(manifestPath);
+    bytes = await (0, import_promises6.readFile)(manifestPath);
   } catch (error2) {
     const code = error2 && typeof error2 === "object" && "code" in error2 ? String(error2.code) : "";
     if (code === "ENOENT") {
@@ -27565,8 +27823,8 @@ async function loadManifest(manifestPath) {
   };
 }
 function relativeInside(directory, filePath) {
-  const rel = (0, import_node_path14.relative)(directory, filePath);
-  if (rel === "" || rel.startsWith("..") || (0, import_node_path14.isAbsolute)(rel)) return void 0;
+  const rel = (0, import_node_path15.relative)(directory, filePath);
+  if (rel === "" || rel.startsWith("..") || (0, import_node_path15.isAbsolute)(rel)) return void 0;
   const normalized = normalizeRelPath(rel);
   if (!normalized) return void 0;
   return normalized;
@@ -27624,6 +27882,8 @@ async function run() {
     setOutput("sha256", result.sha256);
     setOutput("manifest-sha256", result.manifestSha256);
     setOutput("size", String(result.sizeBytes));
+    setOutput("size-bytes", String(result.sizeBytes));
+    setOutput("file-count", String(result.fileCount));
     setOutput("url", result.url);
   } catch (error2) {
     const message = error2 instanceof Error ? error2.message : String(error2);

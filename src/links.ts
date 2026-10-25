@@ -76,6 +76,42 @@ function absoluteSymlinkArchiveTarget(
   return archiveTarget
 }
 
+/** How many outside-root links one failure lists before it counts the rest. */
+export const OUTSIDE_SYMLINK_LIST_LIMIT = 20
+
+export interface OutsideSymlink {
+  path: string
+  target: string
+}
+
+function byPath(left: { path: string }, right: { path: string }): number {
+  if (left.path < right.path) return -1
+  if (left.path > right.path) return 1
+  return 0
+}
+
+/**
+ * One failure for every symlink whose target leaves the package root.
+ * `target` is the link text. It is not resolved, and the link is not followed.
+ * nub's global virtual store is a common source of these links.
+ */
+export function formatOutsideSymlinkFailure(links: readonly OutsideSymlink[]): string {
+  const unique = new Map<string, OutsideSymlink>()
+  for (const link of links) {
+    if (!unique.has(link.path)) unique.set(link.path, link)
+  }
+  const sorted = [...unique.values()].sort(byPath)
+  const shown = sorted.slice(0, OUTSIDE_SYMLINK_LIST_LIMIT)
+  const noun = sorted.length === 1 ? "symlink points" : "symlinks point"
+  const lines = [
+    `${sorted.length} ${noun} outside the package root. The archive stores the link text and does not follow the link. nub's global virtual store can create such links. Set NPM_CONFIG_ENABLE_GLOBAL_VIRTUAL_STORE=false on install to keep the store inside the project.`,
+    ...shown.map((link) => `symlink ${link.path} points outside the package root (${link.target})`),
+  ]
+  const extra = sorted.length - shown.length
+  if (extra > 0) lines.push(`And ${extra} more.`)
+  return lines.join("\n")
+}
+
 /**
  * Why this symlink must not be packed. Undefined when the target stays inside
  * the package root and is not a forbidden path. An absolute link text fails:

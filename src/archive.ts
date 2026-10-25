@@ -8,7 +8,12 @@ import { list, WriteEntry, type ReadEntry } from "tar"
 import { formatBytes } from "./bytes.ts"
 import { MAX_ARCHIVE_BYTES } from "./constants.ts"
 import { ActionError } from "./errors.ts"
-import { symlinkArchiveTarget, symlinkProblem } from "./links.ts"
+import {
+  formatOutsideSymlinkFailure,
+  symlinkArchiveTarget,
+  symlinkProblem,
+  type OutsideSymlink,
+} from "./links.ts"
 import { normalizeRelPath, resolvedSymlink } from "./paths.ts"
 import { hardRejectReason } from "./rules.ts"
 
@@ -97,6 +102,125 @@ interface PackOptions {
   links?: ReadonlyMap<string, string>
 }
 
+interface PlannedEntry {
+  relativePath: string
+  sourcePath: string
+  archiveLink?: string
+  /** Write a temporary symlink instead of the filesystem node. */
+  materialize: boolean
+}
+
+/**
+ * Read each symlink's text and reject every target that leaves the package
+ * root in one failure. The target path is not resolved and the link is not
+ * followed. Planning finishes before any archive byte is written.
+ */
+async function planPackEntries(
+  root: string,
+  files: readonly string[],
+  links: ReadonlyMap<string, string> | undefined,
+): Promise<PlannedEntry[]> {
+  const outside: OutsideSymlink[] = []
+  let forbidden: string | undefined
+  let missing: string | undefined
+  const planned: PlannedEntry[] = []
+  for (const relativePath of files) {
+    const preset = links?.get(relativePath)
+    if (preset !== undefined) {
+      if (symlinkArchiveTarget(root, relativePath, preset) === null) {
+        outside.push({ path: relativePath, target: preset })
+        continue
+      }
+      const problem = symlinkProblem(relativePath, preset)
+      if (problem) {
+        if (!forbidden) forbidden = problem
+        continue
+      }
+      planned.push({
+        relativePath,
+        sourcePath: join(root, relativePath),
+        archiveLink: preset,
+        materialize: true,
+      })
+      continue
+    }
+    const inspected = await inspectPackedPath(root, relativePath)
+    if (inspected.kind === "outside") {
+      outside.push(inspected.link)
+      continue
+    }
+    if (inspected.kind === "forbidden") {
+      if (!forbidden) forbidden = inspected.message
+      continue
+    }
+    if (inspected.kind === "missing") {
+      if (!missing) missing = inspected.message
+      continue
+    }
+    planned.push(inspected.entry)
+  }
+  if (outside.length > 0) throw new ActionError(formatOutsideSymlinkFailure(outside))
+  if (forbidden) throw new ActionError(forbidden)
+  if (missing) throw new ActionError(missing)
+  if (planned.length === 0) {
+    throw new ActionError("Nothing to pack. The include and exclude rules removed every file.")
+  }
+  return planned
+}
+
+type PackedInspection =
+  | { kind: "outside"; link: OutsideSymlink }
+  | { kind: "forbidden"; message: string }
+  | { kind: "missing"; message: string }
+  | { kind: "file"; entry: PlannedEntry }
+
+async function inspectPackedPath(root: string, relativePath: string): Promise<PackedInspection> {
+  const absolute = join(root, relativePath)
+  let info: Stats
+  try {
+    info = await lstat(absolute)
+  } catch (error) {
+    const code = typeof error === "object" && error && "code" in error ? String(error.code) : ""
+    if (code === "ENOENT") {
+      return {
+        kind: "missing",
+        message: `Cannot pack ${relativePath}: the file is missing.`,
+      }
+    }
+    throw error
+  }
+  if (!info.isSymbolicLink()) {
+    return {
+      kind: "file",
+      entry: { relativePath, sourcePath: absolute, materialize: false },
+    }
+  }
+  const target = await readlink(absolute)
+  const archiveTarget = symlinkArchiveTarget(root, relativePath, target)
+  if (archiveTarget === null) {
+    return { kind: "outside", link: { path: relativePath, target } }
+  }
+  const resolved = resolvedSymlink(relativePath, archiveTarget)
+  if (resolved) {
+    const reason = hardRejectReason(resolved)
+    if (reason) {
+      return {
+        kind: "forbidden",
+        message: `symlink ${relativePath} points at a forbidden path (${resolved})`,
+      }
+    }
+  }
+  return {
+    kind: "file",
+    entry: {
+      relativePath,
+      sourcePath: absolute,
+      archiveLink: archiveTarget,
+      materialize: false,
+    },
+  }
+}
+
 /**
  * Pack selected files so the package root is the archive root.
  *
@@ -107,7 +231,8 @@ interface PackOptions {
  * changed. A path in `options.links` is stored as that relative symlink even
  * when the filesystem path is a file reached through a directory symlink. A
  * symlink that points outside the package root, or at a forbidden path, fails
- * the pack.
+ * the pack. Outside-root links are listed together. Their targets are not
+ * followed.
  */
 export async function packFiles(
   root: string,
@@ -118,6 +243,7 @@ export async function packFiles(
   if (files.length === 0) {
     throw new ActionError("Nothing to pack. The include and exclude rules removed every file.")
   }
+  const planned = await planPackEntries(root, files, options.links)
   const maxBytes = options.maxBytes ?? MAX_ARCHIVE_BYTES
   await mkdir(dirname(destination), { recursive: true })
   let scratch: string | undefined
@@ -179,35 +305,24 @@ export async function packFiles(
 
   try {
     try {
-      for (const relativePath of files) {
+      for (const item of planned) {
         if (failed) throw failed
-        const linkTarget = options.links?.get(relativePath)
-        if (linkTarget !== undefined) {
-          const problem = symlinkProblem(relativePath, linkTarget)
-          if (problem) throw new ActionError(problem)
-          const source = await materializeLink(linkTarget)
-          await writePackedEntry(
-            gzip,
-            root,
-            relativePath,
-            linkCache,
-            statCache,
-            () => failed,
-            source,
-            linkTarget,
-          )
-          continue
+        let source = item.sourcePath
+        if (item.materialize) {
+          if (item.archiveLink === undefined) {
+            throw new ActionError(`Internal error: missing link text for ${item.relativePath}.`)
+          }
+          source = await materializeLink(item.archiveLink)
         }
-        const archiveLink = await assertSymlinkAllowed(root, relativePath)
         await writePackedEntry(
           gzip,
           root,
-          relativePath,
+          item.relativePath,
           linkCache,
           statCache,
           () => failed,
-          join(root, relativePath),
-          archiveLink,
+          source,
+          item.archiveLink,
         )
       }
       if (failed) throw failed
@@ -223,41 +338,6 @@ export async function packFiles(
   } finally {
     if (scratch) await rm(scratch, { recursive: true, force: true })
   }
-}
-
-/**
- * Link text to store for a symlink, or `undefined` when the path is not a symlink.
- * An absolute target that stays inside `root` is returned as a relative link.
- * The file on disk is not changed.
- */
-async function assertSymlinkAllowed(
-  root: string,
-  relativePath: string,
-): Promise<string | undefined> {
-  const absolute = join(root, relativePath)
-  let info: Stats
-  try {
-    info = await lstat(absolute)
-  } catch (error) {
-    const code = typeof error === "object" && error && "code" in error ? String(error.code) : ""
-    if (code === "ENOENT") {
-      throw new ActionError(`Cannot pack ${relativePath}: the file is missing.`)
-    }
-    throw error
-  }
-  if (!info.isSymbolicLink()) return undefined
-  const target = await readlink(absolute)
-  const archiveTarget = symlinkArchiveTarget(root, relativePath, target)
-  if (archiveTarget === null) {
-    throw new ActionError(`symlink ${relativePath} points outside the package root (${target})`)
-  }
-  const resolved = resolvedSymlink(relativePath, archiveTarget)
-  if (!resolved) return archiveTarget
-  const reason = hardRejectReason(resolved)
-  if (reason) {
-    throw new ActionError(`symlink ${relativePath} points at a forbidden path (${resolved})`)
-  }
-  return archiveTarget
 }
 
 function writePackedEntry(
