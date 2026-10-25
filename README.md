@@ -39,6 +39,8 @@ jobs:
           node-version: 24
 
       - name: Install and build
+        env:
+          NPM_CONFIG_ENABLE_GLOBAL_VIRTUAL_STORE: "false"
         run: |
           nub install --frozen-lockfile
           nub run build
@@ -50,7 +52,7 @@ jobs:
           path: .
 ```
 
-Install with the package manager the project actually uses, on `linux/amd64`, and omit dev dependencies. The Alchemy publisher guide uses `nub install --frozen-lockfile`. If the package manager keeps its store inside the project (pnpm and Yarn Berry do), that store has to be inside `path` so links still resolve after extract. A `node_modules/alchemy` symlink into that store is expanded while packing.
+Install with the package manager the project actually uses, on `linux/amd64`, and omit dev dependencies. The Alchemy publisher guide uses `nub install --frozen-lockfile`. nub can put its store in a global virtual store outside the project. Links into that store leave the package root. The pack fails on those links and reports each link path and its target. Set `NPM_CONFIG_ENABLE_GLOBAL_VIRTUAL_STORE=false` on the install step so the store stays inside the project. If the package manager keeps its store inside the project (pnpm and Yarn Berry do this when the global virtual store is off), that store has to be inside `path` so links still resolve after extract. A `node_modules/alchemy` symlink into that store is expanded while packing.
 
 A prebuilt archive works too. `org` and `project` are separate inputs so the registry's example works unchanged:
 
@@ -120,10 +122,12 @@ Paste an `anr_` token only. An `anu_` grant cannot be pasted into `token`. The a
 | `version`         | Published version, without a leading `v`.                             |
 | `sha256`          | Lowercase hex sha256 of the archive.                                  |
 | `manifest-sha256` | Lowercase hex sha256 of the raw manifest bytes, including comments.   |
-| `size`            | Archive size in bytes.                                                |
+| `size`            | Archive size in bytes. Same value as `size-bytes`.                    |
+| `file-count`      | Number of file and symlink members in the archive.                    |
+| `size-bytes`      | Gzip archive size in bytes.                                           |
 | `url`             | Deploy URL, `https://alchemy.new/?package=org/project&version=1.2.3`. |
 
-The job summary lists the archive size, both digests, packed files, and paths the packer excluded. It also says `alchemy.new.jsonc` is not in the archive. A skipped publish says that the publish was skipped. A dry run sets the same outputs from the local files.
+The job summary lists the archive size, `size-bytes`, `file-count`, both digests, packed files, and paths the packer excluded. It also says `alchemy.new.jsonc` is not in the archive. A skipped publish says that the publish was skipped. A dry run and a skipped publish both set `file-count` and `size-bytes` from the archive built in that run.
 
 ## What gets packed
 
@@ -139,7 +143,7 @@ The action does not install or prune dependencies. It refuses to upload an archi
 - no secret env file (`.env.example` and `.env.sample` may stay)
 - no `.npmrc`
 - no private key
-- gzip, at most 256 MiB
+- gzip. 80 MiB is a soft warning. 256 MiB gzip is the hard cap
 - manifest at most 256 KB
 
 A checkout's `.git` directory and a local `.env` are dropped while packing. A prebuilt archive that still contains them fails before upload. Setting `default-excludes: false`, or naming a secret in `include`, fails instead of uploading that file.
@@ -168,11 +172,13 @@ These paths are left out of a packed archive when `default-excludes` is `true`. 
 
 `*.d.ts`, `*.map`, and `*.md` stay outside `node_modules`. A build or a runtime may import that markdown. The same three names under `node_modules` are soft excludes. `include` does not put them back while `default-excludes` is `true`.
 
-Symlinks are stored as symlinks. That is what pnpm and nub need inside `node_modules`. When the action packs a directory, an absolute symlink whose target stays inside the package root is written into the archive as the equivalent relative symlink. The link on disk is not changed. A symlink that leaves the package root fails the run, and nothing is uploaded. A symlink that points at a forbidden path, such as `.env` or `.git`, fails the same way. A prebuilt archive that contains an absolute symlink also fails. The store the links point at has to be inside `path`.
+Symlinks are stored as symlinks. That is what pnpm and nub need inside `node_modules`. When the action packs a directory, an absolute symlink whose target stays inside the package root is written into the archive as the equivalent relative symlink. The link on disk is not changed. A symlink that leaves the package root fails the run, and nothing is uploaded. The error names each link path and its target. It lists up to 20 links, then a count of the rest. The link is not followed. nub's global virtual store is a common cause. Set `NPM_CONFIG_ENABLE_GLOBAL_VIRTUAL_STORE=false` on install, as described above. A symlink that points at a forbidden path, such as `.env` or `.git`, fails the same way. A prebuilt archive that contains an absolute symlink also fails. The store the links point at has to be inside `path`.
+
+After selection, the action reads each packed `package.json` at the package root and under `node_modules`. When `exports`, `main`, `module`, or `bin` names a file that exclude patterns or the default excludes removed, the action emits one warning. The warning names the package, the field, and the dropped path. It lists up to 20 targets, then a count of the rest. Packing continues.
 
 nub and pnpm often make `node_modules/alchemy` a directory symlink into that store, for example `node_modules/.store/...`. The registry requires `node_modules/alchemy/bin/cli.js` as its own archive member and does not walk the directory symlink. When that link points at a directory inside the package root, the action packs each file under it as a relative symlink to the store copy, and packs the store copy as well. An absolute directory symlink is expanded the same way when its target stays inside the package root. The link on disk is not changed. The directory symlink itself is not a member. Other directory symlinks stay as one symlink entry.
 
-Packing writes a temporary `.tar.gz` on disk. File bytes are read and compressed into that file; the archive is not buffered in memory. The sha256 and the multipart upload then read the file back. Archives over 80 MiB produce a warning. Packing stops once the gzip passes 256 MiB, before upload.
+Packing writes a temporary `.tar.gz` on disk. File bytes are read and compressed into that file; the archive is not buffered in memory. The sha256 and the multipart upload then read the file back. 80 MiB is a soft warning: the job continues, and the log and the job summary record it. 256 MiB gzip is the hard cap. Packing stops once the gzip passes 256 MiB, and the action does not upload an archive over that cap.
 
 ## Immutable versions
 

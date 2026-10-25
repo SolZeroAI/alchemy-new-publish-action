@@ -60,6 +60,10 @@ outputs:
     description: Lowercase hex sha256 of the raw alchemy.new.jsonc bytes, including comments.
   size:
     description: Archive size in bytes.
+  file-count:
+    description: Number of file and symlink members in the archive. Set from the archive built in this run, including when the publish is skipped.
+  size-bytes:
+    description: Gzip size of the archive in bytes. Set from the archive built in this run, including when the publish is skipped.
   url:
     description: Deploy URL for this exact version.
 runs:

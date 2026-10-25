@@ -276,7 +276,7 @@ describe("node_modules/alchemy directory symlink", () => {
       writeReady(root)
       await assert.rejects(
         () => publish(publishOptions(root)),
-        /node_modules\/alchemy\/bin\/escape\.js: symlink node_modules\/alchemy\/bin\/escape\.js points outside the package root/,
+        /symlink node_modules\/alchemy\/bin\/escape\.js points outside the package root \(\/etc\/passwd\)/,
       )
     })
     await withRoot(async (root) => {
