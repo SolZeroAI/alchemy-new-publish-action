@@ -28,7 +28,7 @@ Packing does not use `tar.create`. That scheduler deadlocks on hardlinked trees 
 
 ## Releases
 
-Do not publish this action to the Marketplace until a maintainer has reviewed it. Do not cut a tag by hand. Do not bump `package.json` or `VERSION` in a feature pull request. Tegami writes both when it versions the package.
+Do not publish this action to the Marketplace until a maintainer has reviewed it. Do not cut a tag by hand. Do not bump `package.json` in a feature pull request. Tegami writes that version when it versions the package.
 
 Tegami owns version bumps and GitHub releases. `scripts/tegami.mts` is the config. `nub run tegami` runs it. Add a changelog under `.tegami/` when the published action has an observable change. The explicit style names this package:
 
@@ -50,7 +50,7 @@ When a pull request does not change the published action, add the GitHub label `
 
 `.github/workflows/release.yml` runs after the Validate workflow succeeds on a push to `master`. The job mints a GitHub App installation token with `actions/create-github-app-token`, pinned by commit SHA. Secrets `RELEASE_APP_ID` and `RELEASE_APP_PRIVATE_KEY` identify the app. The token is limited to this repository and requests contents write and pull requests write. Checkout and `nub run tegami ci` use that token. The floating `v1` tag move uses the same token.
 
-1. A push that adds changelog files versions the package, writes `VERSION`, and opens a pull request from `tegami/version-packages` onto `master`. The app opens that pull request, so GitHub starts Validate and Tegami PR Preview.
+1. A push that adds changelog files versions the package and opens a pull request from `tegami/version-packages` onto `master`. The app opens that pull request, so GitHub starts Validate and Tegami PR Preview.
 2. Merging that pull request leaves a publish lock on `master`. The next run creates the GitHub release and the immutable tag `alchemy-new-publish-action@1.2.3`. `scripts/action-release.mts` does that step. Tegami's npm publish does not run for this private package.
 
 After Tegami creates a stable `1.x.y` tag, the same job moves the floating `v1` tag to that commit. Prereleases and other majors do not move `v1`. `v1` is not a GitHub Release. The semver tag is never force-pushed. `scripts/move-v1-tag.mts` pushes only when `GITHUB_ACTIONS` is set, and only `refs/tags/v1`. Validate runs on a push to the `master` branch and on a pull request into `master`. A tag push is outside that trigger, so moving `v1` does not start another release.
