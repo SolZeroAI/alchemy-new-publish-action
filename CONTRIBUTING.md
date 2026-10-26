@@ -12,7 +12,7 @@ node scripts/ci-dry-run.mjs
 node --import tsx scripts/pack-large.mjs
 ```
 
-`.vscode/settings.json` sets `js/ts.tsdk.path` to `.vscode/tsrs`. `nub install` runs `scripts/link-vscode-tsrs.mjs`, which creates `.vscode/tsrs/tsgo` as a symlink to `../../node_modules/tsrs/bin/tsrs` when that binary is installed and the link is absent. `.vscode/tsrs/` is gitignored. Do not commit the symlink. A tracked symlink makes GitHub Actions stop while it copies the action.
+`.vscode/settings.json` sets `js/ts.experimental.useTsgo` to true and `js/ts.tsdk.path` to `./node_modules/tsrs/tsdk`. That path is the tsrs tsdk launcher shipped with the package. `.vscode/tsrs/` stays gitignored so a leftover local link is not committed. Do not commit a symlink into `node_modules`. A tracked symlink makes GitHub Actions stop while it copies the action.
 
 `nub run check` typechecks with `tsrs --noEmit`, runs oxlint, checks formatting with oxfmt, runs the unit tests, and builds `dist/index.cjs`. Commit `dist/index.cjs` with the source change. CI rejects a pull request whose bundle does not match `nub run build`.
 
