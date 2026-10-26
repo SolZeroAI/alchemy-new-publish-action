@@ -14,3 +14,10 @@ This repository is the GitHub Action `alchemy-new-publish-action`. It packs a re
 - The package is private. Tegami versions it and opens the GitHub release. Do not publish it to npm.
 - After a change under `src/`, rebuild `dist/index.cjs` and run `nub run check-dist`.
 - Do not print `anr_` tokens, `anu_` grants, or OIDC JWTs.
+
+## Pull requests
+
+- Open a pull request as a draft. Keep the pull request in draft while you work.
+- GitHub Actions does not run on a draft pull request. A draft reports the checks as skipped.
+- Before each push, run lint, typecheck, and tests on your machine with `nub run check`. Run `actionlint` when it is available.
+- When the work is done, mark the pull request ready for review. Do not leave a finished pull request in draft. Full CI runs when the pull request is ready.
