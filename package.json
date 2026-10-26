@@ -1,6 +1,6 @@
 {
   "name": "alchemy-new-publish-action",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "description": "GitHub Action that publishes a ready archive to the alchemy.new package registry.",
   "type": "module",

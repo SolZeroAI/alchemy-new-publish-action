@@ -1,3 +1,9 @@
+## alchemy-new-publish-action@1.0.3
+
+### What changed
+
+Development typecheck uses tsrs 0.20.0-ts7.1.0-beta. The editor language service uses that package's tsdk launcher at `./node_modules/tsrs/tsdk`. The install script that created `.vscode/tsrs/tsgo` is removed.
+
 ## alchemy-new-publish-action@1.0.2
 
 ### What changed
