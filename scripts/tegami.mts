@@ -26,6 +26,7 @@ const release = tegami({
           const sections = (plan.packages.get(pkg.id)?.changelogs ?? []).flatMap((entry) =>
             entry.sections.flatMap((section) => [`### ${section.title}`, "", section.content, ""]),
           )
+
           return {
             title: `alchemy-new-publish-action v${pkg.version}`,
             notes: sections.join("\n").trim(),
@@ -41,8 +42,10 @@ const release = tegami({
       name: "root-version-file",
       async applyDraft(draft) {
         const pkg = this.graph.get(publishedPackageId)
+
         if (!pkg) return
         const nextVersion = draft.getPackageDraft(pkg.id)?.bumpVersion(pkg)
+
         if (!nextVersion) return
         await writeFile(join(this.cwd, "VERSION"), `${nextVersion}\n`)
       },

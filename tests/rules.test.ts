@@ -69,6 +69,7 @@ describe("archive rules", () => {
 
   it("rejects secrets that an include list tried to pack", () => {
     const includes = ignore().add([".env", "src"])
+
     const decision = classifyPath(
       ".env",
       { includes: [".env"], excludes: [], defaultExcludes: true },
@@ -77,6 +78,7 @@ describe("archive rules", () => {
         ignores: () => false,
       },
     )
+
     assert.equal(decision.kind, "reject")
   })
 
@@ -89,6 +91,7 @@ describe("archive rules", () => {
         ignores: () => false,
       },
     )
+
     assert.equal(decision.kind, "exclude")
     assert.match(hardRejectReason(".git/HEAD") ?? "", /\.git/)
   })
@@ -102,63 +105,74 @@ describe("archive rules", () => {
         ignores: () => false,
       },
     )
+
     assert.equal(decision.kind, "reject")
   })
 
   it("rejects a secret inside an agent directory when include names that path", () => {
     const includes = ignore().add([".cursor"])
+
     const decision = classifyPath(
       ".cursor/.env",
       { includes: [".cursor"], excludes: [], defaultExcludes: true },
       includes,
       { ignores: () => false },
     )
+
     assert.equal(decision.kind, "reject")
     assert.match(hardRejectReason(".cursor/.env") ?? "", /secret env file/)
   })
 
   it("keeps project markdown that an include list names", () => {
     const includes = ignore().add(["README.md", "docs"])
+
     const decision = classifyPath(
       "docs/guide.md",
       { includes: ["README.md", "docs"], excludes: [], defaultExcludes: true },
       includes,
       { ignores: () => false },
     )
+
     assert.equal(decision.kind, "include")
   })
 
   it("lets a user exclude drop markdown that the defaults keep", () => {
     const includes = ignore().add(["docs", "README.md"])
     const excludes = ignore().add(["docs/**/*.md"])
+
     const decision = classifyPath(
       "docs/guide.md",
       { includes: ["docs", "README.md"], excludes: ["docs/**/*.md"], defaultExcludes: true },
       includes,
       excludes,
     )
+
     assert.equal(decision.kind, "exclude")
   })
 
   it("does not let include put a node_modules declaration back while defaults are on", () => {
     const includes = ignore().add(["node_modules"])
+
     const decision = classifyPath(
       "node_modules/leftpad/index.d.ts",
       { includes: ["node_modules"], excludes: [], defaultExcludes: true },
       includes,
       { ignores: () => false },
     )
+
     assert.equal(decision.kind, "exclude")
   })
 
   it("lets include put a node_modules declaration back when defaults are off", () => {
     const includes = ignore().add(["node_modules"])
+
     const decision = classifyPath(
       "node_modules/leftpad/index.d.ts",
       { includes: ["node_modules"], excludes: [], defaultExcludes: false },
       includes,
       { ignores: () => false },
     )
+
     assert.equal(decision.kind, "include")
   })
 })
@@ -196,13 +210,16 @@ async function writeTree(root: string): Promise<void> {
 describe("default excludes with include and exclude", () => {
   it("drops agent directories and node_modules metadata, and keeps project markdown", async () => {
     const root = await mkdtemp(join(tmpdir(), "alchemy-rules-"))
+
     try {
       await writeTree(root)
+
       const selection = await selectFiles(root, {
         includes: [],
         excludes: [],
         defaultExcludes: true,
       })
+
       assert.deepEqual(selection.files, [
         "README.md",
         "dist/app.js.map",
@@ -223,13 +240,16 @@ describe("default excludes with include and exclude", () => {
 
   it("applies a user exclude and still drops the new defaults", async () => {
     const root = await mkdtemp(join(tmpdir(), "alchemy-rules-"))
+
     try {
       await writeTree(root)
+
       const selection = await selectFiles(root, {
         includes: ["src", "docs", "dist", "README.md", "node_modules", ".cursor", "packages"],
         excludes: ["dist/**/*.map", "docs/guide.md"],
         defaultExcludes: true,
       })
+
       assert.deepEqual(selection.files, [
         "README.md",
         "node_modules/pkg/index.js",
@@ -246,8 +266,10 @@ describe("default excludes with include and exclude", () => {
 
   it("re-adds a soft-excluded path only when default excludes are off", async () => {
     const root = await mkdtemp(join(tmpdir(), "alchemy-rules-"))
+
     try {
       await writeTree(root)
+
       const selection = await selectFiles(root, {
         includes: [
           "src",
@@ -262,6 +284,7 @@ describe("default excludes with include and exclude", () => {
         excludes: ["README.md"],
         defaultExcludes: false,
       })
+
       assert.deepEqual(selection.files, [
         ".cursor/rules.md",
         "dist/app.js.map",
@@ -276,6 +299,7 @@ describe("default excludes with include and exclude", () => {
         "src/types.d.ts",
       ])
       assert.deepEqual(selection.rejected.map((item) => item.path).sort(), [".cursor/.env", ".env"])
+
       for (const item of selection.rejected) {
         assert.match(item.reason, /secret env file/)
       }

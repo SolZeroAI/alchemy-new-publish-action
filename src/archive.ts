@@ -7,7 +7,7 @@ import { Gzip } from "minizlib"
 import { list, WriteEntry, type ReadEntry } from "tar"
 import { formatBytes } from "./bytes.ts"
 import { MAX_ARCHIVE_BYTES } from "./constants.ts"
-import { ActionError } from "./errors.ts"
+import { ActionError, nodeErrorCode } from "./errors.ts"
 import { symlinkArchiveTarget, symlinkProblem } from "./links.ts"
 import { normalizeRelPath, resolvedSymlink } from "./paths.ts"
 import { hardRejectReason } from "./rules.ts"
@@ -23,16 +23,21 @@ function entryType(type: ReadEntry["type"]): ArchiveEntry["type"] {
   if (type === "File" || type === "OldFile" || type === "ContiguousFile" || type === "Link") {
     return "file"
   }
+
   if (type === "SymbolicLink") return "symlink"
+
   if (type === "Directory") return "directory"
+
   return "other"
 }
 
 export async function assertGzip(filePath: string): Promise<void> {
   const handle = await open(filePath, "r")
+
   try {
     const buf = Buffer.alloc(2)
     const { bytesRead } = await handle.read(buf, 0, 2, 0)
+
     if (bytesRead < 2 || buf[0] !== 0x1f || buf[1] !== 0x8b) {
       throw new ActionError(
         "Archive is not gzip. alchemy.new stores a .tar.gz archive with content type application/gzip.",
@@ -45,7 +50,9 @@ export async function assertGzip(filePath: string): Promise<void> {
 
 export async function fileSize(filePath: string): Promise<number> {
   const info = await stat(filePath)
+
   if (!info.isFile()) throw new ActionError(`Archive path is not a file: ${filePath}`)
+
   return info.size
 }
 
@@ -59,6 +66,7 @@ export async function sha256File(filePath: string): Promise<string> {
     stream.on("error", reject)
     stream.on("end", () => resolve())
   })
+
   return hash.digest("hex")
 }
 
@@ -69,14 +77,18 @@ export async function listArchive(archivePath: string): Promise<ArchiveEntry[]> 
     strict: true,
     onReadEntry(entry) {
       const path = normalizeRelPath(entry.path)
-      entries.push({
+
+      const packed: ArchiveEntry = {
         path: path ?? entry.path,
         type: entryType(entry.type),
         size: entry.size,
-        ...(entry.linkpath ? { linkTarget: entry.linkpath } : {}),
-      })
+      }
+
+      if (entry.linkpath) packed.linkTarget = entry.linkpath
+      entries.push(packed)
     },
   })
+
   return entries
 }
 
@@ -118,17 +130,21 @@ export async function packFiles(
   if (files.length === 0) {
     throw new ActionError("Nothing to pack. The include and exclude rules removed every file.")
   }
+
   const maxBytes = options.maxBytes ?? MAX_ARCHIVE_BYTES
   await mkdir(dirname(destination), { recursive: true })
   let scratch: string | undefined
   let scratchCount = 0
+
   const materializeLink = async (linkTarget: string): Promise<string> => {
     scratch ??= await mkdtemp(join(dirname(destination), "alchemy-links-"))
     const source = join(scratch, String(scratchCount))
     scratchCount += 1
     await symlink(linkTarget, source)
+
     return source
   }
+
   const gzip = new Gzip({ portable: true })
   const output = createWriteStream(destination)
   const linkCache = new Map<`${number}:${number}`, string>()
@@ -136,9 +152,9 @@ export async function packFiles(
   let written = 0
   let failed: Error | undefined
 
-  const fail = (error: unknown): Error => {
+  const fail = (cause: unknown): Error => {
     if (!failed) {
-      failed = error instanceof Error ? error : new Error(String(error))
+      failed = cause instanceof Error ? cause : new Error(String(cause))
       // Destroy on a later turn. gzip.destroy() inside a gzip write callback
       // re-enters zlib and the pack never settles.
       queueMicrotask(() => {
@@ -146,20 +162,24 @@ export async function packFiles(
         output.destroy()
       })
     }
+
     return failed
   }
 
   gzip.on("data", (chunk: Buffer) => {
     if (failed) return
     written += chunk.length
+
     if (written > maxBytes) {
       fail(
         new ActionError(
           `Archive exceeded the ${formatBytes(maxBytes)} size cap while packing (${written} bytes written).`,
         ),
       )
+
       return
     }
+
     if (!output.write(chunk)) gzip.pause()
   })
   output.on("drain", () => {
@@ -168,8 +188,8 @@ export async function packFiles(
   gzip.on("end", () => {
     output.end()
   })
-  gzip.on("error", (error: unknown) => fail(error))
-  output.on("error", (error: unknown) => fail(error))
+  gzip.on("error", (cause: unknown) => fail(cause))
+  output.on("error", (cause: unknown) => fail(cause))
 
   // Resolve on close. Errors are stored on `failed` so this promise cannot reject
   // before the pack loop awaits it.
@@ -182,8 +202,10 @@ export async function packFiles(
       for (const relativePath of files) {
         if (failed) throw failed
         const linkTarget = options.links?.get(relativePath)
+
         if (linkTarget !== undefined) {
           const problem = symlinkProblem(relativePath, linkTarget)
+
           if (problem) throw new ActionError(problem)
           const source = await materializeLink(linkTarget)
           await writePackedEntry(
@@ -198,6 +220,7 @@ export async function packFiles(
           )
           continue
         }
+
         const archiveLink = await assertSymlinkAllowed(root, relativePath)
         await writePackedEntry(
           gzip,
@@ -210,9 +233,11 @@ export async function packFiles(
           archiveLink,
         )
       }
+
       if (failed) throw failed
       gzip.end(TAR_EOF)
       await closed
+
       if (failed) throw failed
     } catch (error) {
       const cause = fail(error)
@@ -236,27 +261,36 @@ async function assertSymlinkAllowed(
 ): Promise<string | undefined> {
   const absolute = join(root, relativePath)
   let info: Stats
+
   try {
     info = await lstat(absolute)
   } catch (error) {
-    const code = typeof error === "object" && error && "code" in error ? String(error.code) : ""
+    const code = nodeErrorCode(error)
+
     if (code === "ENOENT") {
       throw new ActionError(`Cannot pack ${relativePath}: the file is missing.`)
     }
+
     throw error
   }
+
   if (!info.isSymbolicLink()) return undefined
   const target = await readlink(absolute)
   const archiveTarget = symlinkArchiveTarget(root, relativePath, target)
+
   if (archiveTarget === null) {
     throw new ActionError(`symlink ${relativePath} points outside the package root (${target})`)
   }
+
   const resolved = resolvedSymlink(relativePath, archiveTarget)
+
   if (!resolved) return archiveTarget
   const reason = hardRejectReason(resolved)
+
   if (reason) {
     throw new ActionError(`symlink ${relativePath} points at a forbidden path (${resolved})`)
   }
+
   return archiveTarget
 }
 
@@ -272,10 +306,13 @@ function writePackedEntry(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const existing = getFailure()
+
     if (existing) {
       reject(existing)
+
       return
     }
+
     const entry = new WriteEntry(relativePath, {
       cwd: root,
       absolute: sourcePath,
@@ -290,47 +327,62 @@ function writePackedEntry(
         }
       },
     })
+
     let settled = false
+
     const settle = (error?: Error) => {
       if (settled) return
       settled = true
       gzip.off("error", onGzipError)
+
       if (error) reject(error)
       else resolve()
     }
+
     const onGzipError = () => {
       const failure = getFailure()
       settle(failure ?? new ActionError(`Stopped packing at ${relativePath}.`))
     }
+
     gzip.on("error", onGzipError)
-    entry.on("error", (error: unknown) => {
-      settle(error instanceof Error ? error : new Error(String(error)))
+    entry.on("error", (cause: unknown) => {
+      settle(cause instanceof Error ? cause : new Error(String(cause)))
     })
     entry.on("end", () => settle())
     entry.on("data", (chunk: Buffer) => {
       if (settled) return
       const failure = getFailure()
+
       if (failure) {
         settle(failure)
+
         return
       }
+
       let accepted = true
+
       try {
         accepted = gzip.write(chunk)
       } catch (error) {
         settle(error instanceof Error ? error : new Error(String(error)))
+
         return
       }
+
       const blocked = getFailure()
+
       if (blocked) {
         settle(blocked)
+
         return
       }
+
       if (!accepted) {
         entry.pause()
         gzip.once("drain", () => {
           if (settled) return
           const later = getFailure()
+
           if (later) settle(later)
           else entry.resume()
         })
@@ -342,20 +394,24 @@ function writePackedEntry(
 export async function tempArchivePath(): Promise<string> {
   const base = process.env.RUNNER_TEMP || tmpdir()
   const dir = await mkdtemp(join(base, "alchemy-new-"))
+
   return join(dir, "alchemy.new.tar.gz")
 }
 
 export function memberMap(entries: readonly ArchiveEntry[]): Map<string, ArchiveEntry> {
   const files = new Map<string, ArchiveEntry>()
+
   for (const entry of entries) {
     if (entry.type === "file" || entry.type === "symlink") files.set(entry.path, entry)
   }
+
   return files
 }
 
 export async function pathExists(filePath: string): Promise<boolean> {
   try {
     const info = await stat(filePath)
+
     return info.isFile() || info.isSymbolicLink()
   } catch {
     return false

@@ -29,6 +29,7 @@ interface PatternMatcher {
 
 function matcher(patterns: string[], label: string): PatternMatcher {
   if (patterns.length === 0) return { ignores: () => false }
+
   try {
     return ignore().add(patterns)
   } catch (error) {
@@ -40,6 +41,7 @@ function matcher(patterns: string[], label: string): PatternMatcher {
 function assertRelativePatterns(label: string, patterns: string[]): void {
   for (const pattern of patterns) {
     const body = pattern.startsWith("!") ? pattern.slice(1) : pattern
+
     if (body.startsWith("/") || body.split("/").includes("..")) {
       throw new ActionError(
         `${label} pattern ${JSON.stringify(pattern)} must stay relative to the package root.`,
@@ -57,27 +59,35 @@ export function classifyPath(
   excludes: PatternMatcher,
 ): Decision {
   const normalized = normalizeRelPath(relativePath)
+
   if (normalized === null || normalized === "") {
     return { kind: "reject", reason: "path is absolute or escapes the package root" }
   }
+
   if (excludes.ignores(normalized)) return { kind: "exclude" }
   const explicitlyIncluded = includes ? includes.ignores(normalized) : false
+
   if (includes && !explicitlyIncluded) return { kind: "exclude" }
   const reason = hardRejectReason(normalized)
+
   // An include list that names a secret fails. A normal tree still drops .git and .env.
   if (reason && (explicitlyIncluded || !options.defaultExcludes)) {
     return { kind: "reject", reason }
   }
+
   if (options.defaultExcludes && isDefaultExcluded(normalized)) return { kind: "exclude" }
+
   if (reason) return { kind: "reject", reason }
+
   return { kind: "include" }
 }
 
 const EXCLUDED_SAMPLE = 200
 
-function fsErrorCode(error: unknown): string {
-  if (!(error instanceof Error) || !("code" in error)) return ""
-  return String(error.code)
+function fsErrorCode(cause: unknown): string {
+  if (!(cause instanceof Error) || !("code" in cause)) return ""
+
+  return String(cause.code)
 }
 
 /**
@@ -100,6 +110,7 @@ export async function selectFiles(root: string, options: SelectOptions): Promise
 
   const noteExcluded = (rel: string): void => {
     excludedCount += 1
+
     if (excluded.length < EXCLUDED_SAMPLE) excluded.push(rel)
   }
 
@@ -109,41 +120,52 @@ export async function selectFiles(root: string, options: SelectOptions): Promise
 
   async function walkLinked(realDir: string, logicalDir: string): Promise<void> {
     const entries = await readdir(join(root, realDir), { withFileTypes: true })
+
     for (const entry of entries) {
       const logical = `${logicalDir}/${entry.name}`
       const real = `${realDir}/${entry.name}`
       const decision = classifyPath(logical, options, includes, excludes)
+
       if (decision.kind === "exclude") {
         noteExcluded(logical)
         continue
       }
+
       if (decision.kind === "reject") {
         noteRejected(logical, decision.reason)
         continue
       }
+
       if (entry.isSymbolicLink()) {
         const target = await readlink(join(root, real))
         const resolved = packageRelativeTarget(root, real, target)
+
         if (resolved === null) {
           noteRejected(logical, `symlink ${logical} points outside the package root (${target})`)
           continue
         }
+
         const reason = hardRejectReason(resolved)
+
         if (reason) {
           noteRejected(logical, `symlink ${logical} points at a forbidden path (${resolved})`)
           continue
         }
+
         recordLink(logical, resolved)
         continue
       }
+
       if (entry.isDirectory()) {
         await walkLinked(real, logical)
         continue
       }
+
       if (entry.isFile()) {
         recordLink(logical, real)
         continue
       }
+
       noteExcluded(logical)
     }
   }
@@ -151,10 +173,13 @@ export async function selectFiles(root: string, options: SelectOptions): Promise
   function recordLink(logical: string, real: string): void {
     const target = relativeArchiveLink(logical, real)
     const problem = symlinkProblem(logical, target)
+
     if (problem) {
       noteRejected(logical, problem)
+
       return
     }
+
     files.push(logical)
     links.set(logical, target)
   }
@@ -162,63 +187,83 @@ export async function selectFiles(root: string, options: SelectOptions): Promise
   async function expandAlchemyLink(rel: string): Promise<boolean> {
     const target = await readlink(join(root, rel))
     const resolved = packageRelativeTarget(root, rel, target)
+
     if (resolved === null) {
       noteRejected(rel, `symlink ${rel} points outside the package root (${target})`)
+
       return true
     }
+
     if (resolved === rel || resolved.startsWith(`${rel}/`)) {
       noteRejected(rel, `symlink ${rel} points at itself (${target})`)
+
       return true
     }
+
     let info: Stats
+
     try {
       info = await stat(join(root, resolved))
     } catch (error) {
       const code = fsErrorCode(error)
+
       if (code === "ENOENT") return false
+
       if (code === "ELOOP") {
         noteRejected(rel, `symlink ${rel} points at itself (${target})`)
+
         return true
       }
+
       throw error
     }
+
     if (!info.isDirectory()) return false
     await walkLinked(resolved, rel)
+
     return true
   }
 
   async function walk(relDir: string): Promise<void> {
     const absolute = relDir === "" ? root : join(root, relDir)
     const entries = await readdir(absolute, { withFileTypes: true })
+
     for (const entry of entries) {
       const rel = relDir === "" ? entry.name : `${relDir}/${entry.name}`
       const decision = classifyPath(rel, options, includes, excludes)
+
       if (decision.kind === "exclude") {
         noteExcluded(rel)
         continue
       }
+
       if (decision.kind === "reject") {
         noteRejected(rel, decision.reason)
         continue
       }
+
       if (entry.isSymbolicLink()) {
         if (rel === ALCHEMY_PACKAGE_PATH && (await expandAlchemyLink(rel))) continue
         files.push(rel)
         continue
       }
+
       if (entry.isDirectory()) {
         await walk(rel)
         continue
       }
+
       if (entry.isFile()) {
         files.push(rel)
         continue
       }
+
       noteExcluded(rel)
     }
   }
 
   await walk("")
   files.sort()
+
   return { files, links, excluded, excludedCount, rejected }
 }

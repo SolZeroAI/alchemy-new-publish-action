@@ -11,12 +11,28 @@ import { uploadArchive } from "../src/upload.ts"
 import { silentLogger } from "../src/log.ts"
 import { json, withServer } from "./helpers.ts"
 
+interface CapturedExchange {
+  authorization?: string
+  body?: {
+    token?: string
+    org?: string
+    project?: string
+  }
+}
+
+interface CompletedUpload {
+  sha256?: string
+  manifestSha256?: string
+  parts?: Array<{ partNumber: number; etag: string }>
+}
+
 describe("registry client", () => {
   it("exchanges an OIDC token without sending it as Authorization", async () => {
-    const seen: { authorization?: string; body?: unknown } = {}
+    const seen: CapturedExchange = {}
+
     const server = await withServer((req, res, body) => {
       seen.authorization = req.headers.authorization
-      seen.body = JSON.parse(body.toString("utf8")) as unknown
+      seen.body = JSON.parse(body.toString("utf8"))
       json(res, 200, {
         token: "anu_grant",
         expiresAt: "2026-01-01T00:15:00.000Z",
@@ -24,19 +40,23 @@ describe("registry client", () => {
         project: "example-stack",
       })
     })
+
     const masked: string[] = []
+
     try {
       const client = createRegistryClient({
         registryUrl: server.url,
         log: silentLogger,
         sleep: async () => {},
       })
+
       const token = await authorize({
         org: "example-org",
         project: "example-stack",
         client,
         getIdToken: async (audience) => {
           assert.equal(audience, OIDC_AUDIENCE)
+
           return "eyJhbGci.eyJzdWIi.signature"
         },
         mask: (secret) => {
@@ -44,6 +64,7 @@ describe("registry client", () => {
         },
         log: silentLogger,
       })
+
       assert.equal(token, "anu_grant")
       assert.equal(seen.authorization, undefined)
       assert.deepEqual(seen.body, {
@@ -68,17 +89,17 @@ describe("registry client", () => {
     const manifestSha256 = createHash("sha256").update(manifest).digest("hex")
     let puts = 0
     const calls: string[] = []
-    let completed: {
-      sha256?: string
-      manifestSha256?: string
-      parts?: Array<{ partNumber: number; etag: string }>
-    } = {}
+    let completed: CompletedUpload = {}
+
     const server = await withServer((req, res, body) => {
       const url = req.url ?? ""
+
       if (req.method === "GET") {
         json(res, 404, { message: "missing", code: "not_found" })
+
         return
       }
+
       if (req.method === "POST" && url.endsWith("/uploads")) {
         json(res, 200, {
           uploadId: "upload-1",
@@ -87,8 +108,10 @@ describe("registry client", () => {
           expiresAt: "2026-01-01T01:00:00.000Z",
           contentType: "application/gzip",
         })
+
         return
       }
+
       if (req.method === "PUT" && url.endsWith("/manifest")) {
         calls.push("manifest")
         assert.equal(req.headers.authorization, "Bearer anr_test")
@@ -99,23 +122,30 @@ describe("registry client", () => {
           sizeBytes: body.length,
           contentType: "application/json",
         })
+
         return
       }
+
       if (req.method === "PUT" && url.includes("/parts/")) {
         calls.push("part")
         puts += 1
+
         if (puts === 1) {
           json(res, 503, { message: "unavailable", code: "unavailable" })
+
           return
         }
+
         assert.equal(req.headers.authorization, "Bearer anr_test")
         assert.equal(req.headers["content-type"], "application/octet-stream")
         assert.equal(body.toString("utf8"), bytes.toString("utf8"))
         json(res, 200, { partNumber: 1, etag: '"etag-1"', sizeBytes: body.length })
+
         return
       }
+
       if (req.method === "POST" && url.endsWith("/complete")) {
-        completed = JSON.parse(body.toString("utf8")) as typeof completed
+        completed = JSON.parse(body.toString("utf8"))
         json(res, 200, {
           org: "example-org",
           project: "example-stack",
@@ -127,11 +157,15 @@ describe("registry client", () => {
           yanked: false,
           publishedAt: "2026-01-01T00:00:00.000Z",
         })
+
         return
       }
+
       json(res, 500, { message: `unexpected ${req.method} ${url}`, code: "unexpected" })
     })
+
     const logs: string[] = []
+
     try {
       const client = createRegistryClient({
         registryUrl: server.url,
@@ -145,6 +179,7 @@ describe("registry client", () => {
         },
         sleep: async () => {},
       })
+
       const result = await uploadArchive({
         client,
         org: "example-org",
@@ -159,6 +194,7 @@ describe("registry client", () => {
         log: { info: (message) => logs.push(message), warn: (message) => logs.push(message) },
         authorize: async () => "anr_test",
       })
+
       assert.equal(result.skipped, false)
       assert.equal(result.record.sha256, sha256)
       assert.equal(puts, 2)
@@ -182,12 +218,16 @@ describe("registry client", () => {
     const manifest = Buffer.from('{"schemaVersion":1}\n')
     const manifestSha256 = createHash("sha256").update(manifest).digest("hex")
     let aborted = false
+
     const server = await withServer((req, res) => {
       const url = req.url ?? ""
+
       if (req.method === "GET") {
         json(res, 404, { message: "missing", code: "not_found" })
+
         return
       }
+
       if (req.method === "POST" && url.endsWith("/uploads")) {
         json(res, 200, {
           uploadId: "upload-2",
@@ -195,37 +235,49 @@ describe("registry client", () => {
           maxBytes: 268435456,
           contentType: "application/gzip",
         })
+
         return
       }
+
       if (req.method === "PUT" && url.endsWith("/manifest")) {
         json(res, 200, {
           sha256: manifestSha256,
           sizeBytes: manifest.length,
           contentType: "application/json",
         })
+
         return
       }
+
       if (req.method === "PUT") {
         json(res, 200, { partNumber: 1, etag: '"etag"', sizeBytes: bytes.length })
+
         return
       }
+
       if (url.endsWith("/complete")) {
         json(res, 400, { message: "hash", code: "digest_mismatch" })
+
         return
       }
+
       if (url.endsWith("/abort")) {
         aborted = true
         json(res, 200, { ok: true })
+
         return
       }
+
       json(res, 500, { message: "unexpected", code: "unexpected" })
     })
+
     try {
       const client = createRegistryClient({
         registryUrl: server.url,
         log: silentLogger,
         sleep: async () => {},
       })
+
       await assert.rejects(
         () =>
           uploadArchive({

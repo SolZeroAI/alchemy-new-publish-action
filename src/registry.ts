@@ -2,7 +2,14 @@ import { USER_AGENT } from "./constants.ts"
 import { ActionError, RegistryError } from "./errors.ts"
 import type { Logger } from "./log.ts"
 import { silentLogger, redact } from "./log.ts"
-import { isRecord, stringField } from "./record.ts"
+import {
+  isNumber,
+  isRecord,
+  isString,
+  parseJsonValue,
+  stringField,
+  type JsonObject,
+} from "./record.ts"
 import { withRetry, type Sleep, sleep } from "./retry.ts"
 
 export interface VersionRecord {
@@ -82,25 +89,31 @@ interface RegistryClientOptions {
 
 export function normalizeRegistryUrl(input: string): string {
   let url: URL
+
   try {
     url = new URL(input)
   } catch {
     throw new ActionError(`registry-url ${JSON.stringify(input)} is not an absolute URL.`)
   }
+
   if (url.protocol !== "https:" && url.protocol !== "http:") {
     throw new ActionError("registry-url must be http or https.")
   }
+
   if (url.username || url.password) {
     throw new ActionError("registry-url must not include credentials.")
   }
+
   if (url.pathname !== "/" && url.pathname !== "") {
     throw new ActionError(
       "registry-url must be the API origin without a path. The action appends /v1/....",
     )
   }
+
   if (url.search || url.hash) {
     throw new ActionError("registry-url must not include a query or hash.")
   }
+
   return url.origin
 }
 
@@ -128,16 +141,21 @@ export function createRegistryClient(options: RegistryClientOptions): RegistryCl
     const headers = new Headers()
     headers.set("Accept", "application/json")
     headers.set("User-Agent", USER_AGENT)
+
     if (init.auth !== false && token) headers.set("Authorization", `Bearer ${token}`)
     const body = init.json !== undefined ? JSON.stringify(init.json) : init.body
+
     if (init.json !== undefined) {
       headers.set("Content-Type", "application/json")
     } else if (init.contentType) {
       headers.set("Content-Type", init.contentType)
     }
-    if (typeof body === "string") headers.set("Content-Length", String(Buffer.byteLength(body)))
+
+    if (isString(body)) headers.set("Content-Length", String(Buffer.byteLength(body)))
+
     if (Buffer.isBuffer(body)) headers.set("Content-Length", String(body.length))
     let response: Response
+
     try {
       response = await fetchImpl(`${options.registryUrl}${path}`, {
         method,
@@ -148,15 +166,19 @@ export function createRegistryClient(options: RegistryClientOptions): RegistryCl
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+
       if (/redirect/i.test(message)) {
         throw new RegistryError(
           "The registry URL redirected. The action does not follow redirects with credentials.",
           0,
         )
       }
+
       throw error
     }
+
     const text = await response.text()
+
     return { status: response.status, headers: response.headers, text: text.slice(0, 8000) }
   }
 
@@ -185,24 +207,30 @@ export function createRegistryClient(options: RegistryClientOptions): RegistryCl
           json: { token: input.token, org: input.org, project: input.project },
           auth: false,
         })
+
       const response = await withRetry(
         "OIDC exchange",
         async () => {
           const result = await run()
+
           if (result.status !== 200) {
             fail(result.status, result.text, result.headers, "OIDC exchange failed")
           }
+
           return result
         },
         log,
         sleepFn,
       )
+
       const body = parseJson(response.text, "OIDC exchange")
       const grant = stringField(body, "token")
       const expiresAt = stringField(body, "expiresAt")
+
       if (!grant || !expiresAt) {
         throw new RegistryError("OIDC exchange returned no token or expiresAt.", response.status)
       }
+
       return {
         token: grant,
         expiresAt,
@@ -212,54 +240,66 @@ export function createRegistryClient(options: RegistryClientOptions): RegistryCl
     },
     async getVersion(org, project, version) {
       const path = packageVersionPath(org, project, version)
+
       const response = await withRetry(
         `GET ${path}`,
         async () => {
           const result = await request("GET", path, { auth: Boolean(token) })
+
           if (result.status !== 200 && result.status !== 404) {
             fail(result.status, result.text, result.headers, `GET ${path} failed`)
           }
+
           return result
         },
         log,
         sleepFn,
       )
+
       if (response.status === 404) return undefined
+
       return parseVersionRecord(parseJson(response.text, "version lookup"), org, project, version)
     },
     async startUpload(org, project, version) {
       const path = `${packageVersionPath(org, project, version)}/uploads`
+
       const response = await withRetry(
         `start upload ${org}/${project}@${version}`,
         async () => {
           const result = await request("POST", path)
+
           if (result.status !== 200) {
             fail(result.status, result.text, result.headers, "Starting the upload failed")
           }
+
           return result
         },
         log,
         sleepFn,
       )
+
       const body = parseJson(response.text, "start upload")
       const uploadId = stringField(body, "uploadId")
       const partSize = body.partSize
       const maxBytes = body.maxBytes
-      if (!uploadId || typeof partSize !== "number" || typeof maxBytes !== "number") {
+
+      if (!uploadId || !isNumber(partSize) || !isNumber(maxBytes)) {
         throw new RegistryError("Start upload returned no uploadId, partSize, or maxBytes.", 200)
       }
+
       const contentType = stringField(body, "contentType")
       const expiresAt = stringField(body, "expiresAt")
-      return {
-        uploadId,
-        partSize,
-        maxBytes,
-        ...(expiresAt ? { expiresAt } : {}),
-        ...(contentType ? { contentType } : {}),
-      }
+      const session: UploadSession = { uploadId, partSize, maxBytes }
+
+      if (expiresAt) session.expiresAt = expiresAt
+
+      if (contentType) session.contentType = contentType
+
+      return session
     },
     async uploadPart(input) {
       const path = `${packageVersionPath(input.org, input.project, input.version)}/uploads/${encodeURIComponent(input.uploadId)}/parts/${input.partNumber}`
+
       const response = await withRetry(
         `upload part ${input.partNumber}`,
         async () => {
@@ -269,6 +309,7 @@ export function createRegistryClient(options: RegistryClientOptions): RegistryCl
             contentType: "application/octet-stream",
             timeoutMs: 120_000,
           })
+
           if (result.status !== 200) {
             fail(
               result.status,
@@ -277,22 +318,28 @@ export function createRegistryClient(options: RegistryClientOptions): RegistryCl
               `Uploading part ${input.partNumber} failed`,
             )
           }
+
           return result
         },
         log,
         sleepFn,
       )
+
       const body = parseJson(response.text, `part ${input.partNumber}`)
       const etag = stringField(body, "etag")
+
       if (!etag) {
         throw new RegistryError(`Part ${input.partNumber} returned no etag.`, 200)
       }
-      const sizeBytes = typeof body.sizeBytes === "number" ? body.sizeBytes : input.body.length
-      const partNumber = typeof body.partNumber === "number" ? body.partNumber : input.partNumber
+
+      const sizeBytes = isNumber(body.sizeBytes) ? body.sizeBytes : input.body.length
+      const partNumber = isNumber(body.partNumber) ? body.partNumber : input.partNumber
+
       return { partNumber, etag, sizeBytes }
     },
     async uploadManifest(input) {
       const path = `${packageVersionPath(input.org, input.project, input.version)}/uploads/${encodeURIComponent(input.uploadId)}/manifest`
+
       const response = await withRetry(
         "upload manifest",
         async () => {
@@ -301,26 +348,30 @@ export function createRegistryClient(options: RegistryClientOptions): RegistryCl
             contentType: "application/json",
             timeoutMs: 60_000,
           })
+
           if (result.status !== 200) {
             fail(result.status, result.text, result.headers, "Uploading the manifest failed")
           }
+
           return result
         },
         log,
         sleepFn,
       )
+
       const body = parseJson(response.text, "manifest upload")
       const sha256 = stringField(body, "sha256") ?? ""
-      const sizeBytes = typeof body.sizeBytes === "number" ? body.sizeBytes : input.body.length
+      const sizeBytes = isNumber(body.sizeBytes) ? body.sizeBytes : input.body.length
       const contentType = stringField(body, "contentType")
-      return {
-        sha256,
-        sizeBytes,
-        ...(contentType ? { contentType } : {}),
-      }
+      const uploaded = { sha256, sizeBytes }
+
+      if (contentType) return { ...uploaded, contentType }
+
+      return uploaded
     },
     async completeUpload(input) {
       const path = `${packageVersionPath(input.org, input.project, input.version)}/uploads/${encodeURIComponent(input.uploadId)}/complete`
+
       const response = await withRetry(
         "complete upload",
         async () => {
@@ -331,14 +382,17 @@ export function createRegistryClient(options: RegistryClientOptions): RegistryCl
               parts: input.parts,
             },
           })
+
           if (result.status !== 200) {
             fail(result.status, result.text, result.headers, "Completing the upload failed")
           }
+
           return result
         },
         log,
         sleepFn,
       )
+
       return parseVersionRecord(
         parseJson(response.text, "complete upload"),
         input.org,
@@ -349,6 +403,7 @@ export function createRegistryClient(options: RegistryClientOptions): RegistryCl
     async abortUpload(org, project, version, uploadId) {
       const path = `${packageVersionPath(org, project, version)}/uploads/${encodeURIComponent(uploadId)}/abort`
       const response = await request("POST", path, { timeoutMs: 30_000 })
+
       if (response.status !== 200) {
         fail(response.status, response.text, response.headers, "Aborting the upload failed")
       }
@@ -356,10 +411,12 @@ export function createRegistryClient(options: RegistryClientOptions): RegistryCl
   }
 }
 
-function parseJson(text: string, label: string): Record<string, unknown> {
+function parseJson(text: string, label: string): JsonObject {
   try {
-    const value = JSON.parse(text) as unknown
+    const value = parseJsonValue(text)
+
     if (!isRecord(value)) throw new Error("response was not a JSON object")
+
     return value
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
@@ -367,48 +424,67 @@ function parseJson(text: string, label: string): Record<string, unknown> {
   }
 }
 
-function parseErrorBody(text: string): { message?: string; code?: string } | undefined {
+interface RegistryErrorBody {
+  message?: string
+  code?: string
+}
+
+function parseErrorBody(text: string): RegistryErrorBody | undefined {
   try {
-    const value = JSON.parse(text) as unknown
+    const value = parseJsonValue(text)
+
     if (!isRecord(value)) return undefined
     const message = stringField(value, "message")
     const code = stringField(value, "code")
-    return {
-      ...(message ? { message } : {}),
-      ...(code ? { code } : {}),
-    }
+    const parsed: RegistryErrorBody = {}
+
+    if (message) parsed.message = message
+
+    if (code) parsed.code = code
+
+    return parsed
   } catch {
     return undefined
   }
 }
 
 function parseVersionRecord(
-  body: Record<string, unknown>,
+  body: JsonObject,
   org: string,
   project: string,
   version: string,
 ): VersionRecord {
-  return {
+  const manifestSha256 = stringField(body, "manifestSha256")
+  const contentType = stringField(body, "contentType")
+  const publishedAt = stringField(body, "publishedAt")
+
+  const record: VersionRecord = {
     org: stringField(body, "org") ?? org,
     project: stringField(body, "project") ?? project,
     version: stringField(body, "version") ?? version,
     sha256: stringField(body, "sha256") ?? "",
-    ...(stringField(body, "manifestSha256")
-      ? { manifestSha256: stringField(body, "manifestSha256") }
-      : {}),
-    sizeBytes: typeof body.sizeBytes === "number" ? body.sizeBytes : 0,
-    ...(stringField(body, "contentType") ? { contentType: stringField(body, "contentType") } : {}),
+    sizeBytes: isNumber(body.sizeBytes) ? body.sizeBytes : 0,
     yanked: body.yanked === true,
-    ...(stringField(body, "publishedAt") ? { publishedAt: stringField(body, "publishedAt") } : {}),
   }
+
+  if (manifestSha256) record.manifestSha256 = manifestSha256
+
+  if (contentType) record.contentType = contentType
+
+  if (publishedAt) record.publishedAt = publishedAt
+
+  return record
 }
 
 function parseRetryAfter(header: string | null): number | undefined {
   if (!header) return undefined
   const seconds = Number(header)
+
   if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000)
   const date = Date.parse(header)
+
   if (Number.isFinite(date)) return Math.max(0, date - Date.now())
+
   return undefined
 }
 

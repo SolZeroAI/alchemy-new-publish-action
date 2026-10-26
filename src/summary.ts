@@ -32,14 +32,17 @@ function escapeMd(value: string): string {
 function listBlock(title: string, paths: string[], total: number): string {
   const shown = paths.slice(0, LIST_CAP)
   const lines = [`### ${title}`, ""]
+
   if (shown.length === 0) {
     lines.push("None.")
   } else {
     for (const path of shown) lines.push(`- \`${escapeMd(path)}\``)
   }
+
   if (total > shown.length) {
     lines.push("", `And ${total - shown.length} more.`)
   }
+
   return lines.join("\n")
 }
 
@@ -49,6 +52,7 @@ export function renderSummary(info: SummaryInfo): string {
     : info.skipped
       ? "The publish was skipped. This version is already published with the same digests."
       : "Published."
+
   const lines = [
     "## alchemy.new publish",
     "",
@@ -65,11 +69,13 @@ export function renderSummary(info: SummaryInfo): string {
     `| Deploy URL | ${info.url} |`,
     `| Registry | ${info.registryUrl} |`,
   ]
+
   if (info.overRecommended) {
     lines.push(
       `| Warning | Archive is above the 80 MiB publisher target. The hard cap is 256 MiB. |`,
     )
   }
+
   lines.push(
     "",
     listBlock("Packed files", info.files, info.fileCount),
@@ -77,6 +83,7 @@ export function renderSummary(info: SummaryInfo): string {
     listBlock("Excluded", info.excluded, info.excludedCount),
     "",
   )
+
   return lines.join("\n")
 }
 

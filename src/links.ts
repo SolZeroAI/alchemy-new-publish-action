@@ -8,6 +8,7 @@ export function relativeArchiveLink(fromFile: string, toFile: string): string {
   const slash = fromFile.lastIndexOf("/")
   const fromDir = slash === -1 ? "." : fromFile.slice(0, slash)
   const target = posixRelative(fromDir, toFile)
+
   return target.length === 0 ? "." : target
 }
 
@@ -26,11 +27,14 @@ export function packageRelativeTarget(
   target: string,
 ): string | null {
   if (!isAbsoluteLinkTarget(target)) return resolvedSymlink(fromPath, target)
+
   // `resolve` on a POSIX host joins a drive-letter target onto the working
   // directory. That target cannot name a path inside this package.
   if (process.platform !== "win32" && /^[A-Za-z]:[\\/]/.test(target)) return null
   const fromRoot = relative(resolve(root), resolve(target))
+
   if (fromRoot !== "" && isAbsolute(fromRoot)) return null
+
   return normalizeRelPath(fromRoot.split(sep).join("/"))
 }
 
@@ -47,6 +51,7 @@ export function symlinkArchiveTarget(
   if (!isAbsoluteLinkTarget(target)) {
     return symlinkResolvesInside(relativePath, target) ? target : null
   }
+
   return absoluteSymlinkArchiveTarget(root, relativePath, target)
 }
 
@@ -61,18 +66,22 @@ function absoluteSymlinkArchiveTarget(
   target: string,
 ): string | null {
   const packageRelative = packageRelativeTarget(root, relativePath, target)
+
   if (packageRelative === null) return null
   const slash = relativePath.lastIndexOf("/")
   const dir = slash === -1 ? "." : relativePath.slice(0, slash)
   const link = posixRelative(dir, packageRelative === "" ? "." : packageRelative)
   const archiveTarget = link === "" ? "." : link
+
   if (!symlinkResolvesInside(relativePath, archiveTarget)) return null
   const resolved = resolvedSymlink(relativePath, archiveTarget)
+
   if (packageRelative === "") {
     if (resolved !== "") return null
   } else if (resolved !== packageRelative) {
     return null
   }
+
   return archiveTarget
 }
 
@@ -85,11 +94,16 @@ export function symlinkProblem(fromPath: string, target: string): string | undef
   if (!symlinkResolvesInside(fromPath, target)) {
     return `symlink ${fromPath} points outside the package root (${target})`
   }
+
   const resolved = resolvedSymlink(fromPath, target)
+
   if (!resolved) {
     return `symlink ${fromPath} points outside the package root (${target})`
   }
+
   const reason = hardRejectReason(resolved)
+
   if (reason) return `symlink ${fromPath} points at a forbidden path (${resolved})`
+
   return undefined
 }

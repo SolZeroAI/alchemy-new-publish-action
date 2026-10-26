@@ -28,12 +28,15 @@ const entry = (path: string, type: ArchiveEntry["type"], linkTarget?: string): A
     type,
     size: type === "file" ? 1 : 0,
   }
+
   if (linkTarget !== undefined) item.linkTarget = linkTarget
+
   return item
 }
 
 const withRoot = async (run: (root: string) => Promise<void>): Promise<void> => {
   const root = await mkdtemp(join(tmpdir(), "alchemy-link-"))
+
   try {
     await run(root)
   } finally {
@@ -68,6 +71,7 @@ const installLinkedAlchemy = (root: string): void => {
 const publishOptions = (root: string) => {
   const include: string[] = []
   const exclude: string[] = []
+
   return {
     path: root,
     version: "1.2.3",
@@ -88,12 +92,14 @@ describe("node_modules/alchemy directory symlink", () => {
     await withRoot(async (root) => {
       installLinkedAlchemy(root)
       const out = await mkdtemp(join(tmpdir(), "alchemy-link-out-"))
+
       try {
         const selection = await selectFiles(root, {
           includes: [],
           excludes: [],
           defaultExcludes: true,
         })
+
         assert.equal(selection.rejected.length, 0)
         assert.equal(selection.files.includes("node_modules/alchemy"), false)
         assert.equal(selection.files.includes("node_modules/leftpad"), true)
@@ -108,19 +114,24 @@ describe("node_modules/alchemy directory symlink", () => {
         const archive = join(out, "alchemy.new.tar.gz")
         const files = filesForArchive(selection.files, "alchemy.new.jsonc")
         const links = new Map<string, string>()
+
         for (const file of files) {
           const target = selection.links.get(file)
+
           if (target !== undefined) links.set(file, target)
         }
+
         await packFiles(root, files, archive, { links })
         const entries = await listArchive(archive)
         const cli = entries.find((item) => item.path === CLI_PATH)
         assert.equal(cli?.type, "symlink")
         assert.equal(cli?.linkTarget, cliLink)
+
         const stored = entries.find(
           (item) =>
             item.path === `node_modules/.store/${storeName}/node_modules/alchemy/bin/cli.js`,
         )
+
         assert.equal(stored?.type, "file")
         const run = entries.find((item) => item.path === "node_modules/alchemy/bin/run.js")
         assert.equal(run?.type, "symlink")
@@ -167,12 +178,14 @@ describe("node_modules/alchemy directory symlink", () => {
       symlinkSync(store, packageLink)
       writeReady(root)
       const out = await mkdtemp(join(tmpdir(), "alchemy-link-abs-"))
+
       try {
         const selection = await selectFiles(root, {
           includes: [],
           excludes: [],
           defaultExcludes: true,
         })
+
         assert.equal(selection.rejected.length, 0)
         assert.equal(
           selection.links.get(CLI_PATH),
@@ -185,10 +198,13 @@ describe("node_modules/alchemy directory symlink", () => {
         const archive = join(out, "alchemy.new.tar.gz")
         const files = filesForArchive(selection.files, "alchemy.new.jsonc")
         const links = new Map<string, string>()
+
         for (const file of files) {
           const target = selection.links.get(file)
+
           if (target !== undefined) links.set(file, target)
         }
+
         await packFiles(root, files, archive, { links })
         const entries = await listArchive(archive)
         const cli = entries.find((item) => item.path === CLI_PATH)
@@ -200,9 +216,11 @@ describe("node_modules/alchemy directory symlink", () => {
           packedTool?.linkTarget,
           "../../.store/alchemy/node_modules/alchemy/dist/run.js",
         )
+
         const storedTool = entries.find(
           (item) => item.path === "node_modules/.store/alchemy/node_modules/alchemy/bin/tool.js",
         )
+
         assert.equal(storedTool?.type, "symlink")
         assert.equal(storedTool?.linkTarget, "../dist/run.js")
         assert.equal(
@@ -222,12 +240,14 @@ describe("node_modules/alchemy directory symlink", () => {
     await withRoot(async (root) => {
       installLinkedAlchemy(root)
       const summaries: string[] = []
+
       const result = await publish({
         ...publishOptions(root),
         writeSummary: async (markdown) => {
           summaries.push(markdown)
         },
       })
+
       assert.equal(result.dryRun, true)
       assert.match(result.sha256, /^[0-9a-f]{64}$/)
       assert.match(summaries[0] ?? "", /node_modules\/alchemy\/bin\/cli\.js/)

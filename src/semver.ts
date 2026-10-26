@@ -11,7 +11,9 @@ const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.
 function parseSemver(input: string): string | undefined {
   const trimmed = input.trim()
   const bare = trimmed.startsWith("v") ? trimmed.slice(1) : trimmed
+
   if (!SEMVER.test(bare)) return undefined
+
   return bare
 }
 
@@ -21,12 +23,15 @@ export function canonicalVersion(input: string, label: string): string {
       `${label} ${input} includes build metadata. alchemy.new versions are exact semver without build metadata.`,
     )
   }
+
   const parsed = parseSemver(input)
+
   if (!parsed) {
     throw new ActionError(
       `${label} ${input} is not exact semver without build metadata. Example: 1.2.3 or 1.2.3-rc.1.`,
     )
   }
+
   return parsed
 }
 
@@ -34,11 +39,13 @@ export function canonicalVersion(input: string, label: string): string {
 export function versionFromGitRef(ref: string | undefined): string | undefined {
   if (!ref?.startsWith("refs/tags/")) return undefined
   const name = ref.slice("refs/tags/".length)
+
   if (name.includes("+")) {
     throw new ActionError(
       `Git tag ${name} includes build metadata. alchemy.new versions are exact semver without build metadata.`,
     )
   }
+
   return parseSemver(name)
 }
 
@@ -48,10 +55,12 @@ export function resolveVersion(input: {
   manifestVersion?: string
 }): string {
   let version: string
+
   if (input.explicit) {
     version = canonicalVersion(input.explicit, "Version")
   } else {
     const fromTag = versionFromGitRef(input.gitRef)
+
     if (fromTag) {
       version = fromTag
     } else if (input.manifestVersion) {
@@ -65,11 +74,13 @@ export function resolveVersion(input: {
 
   if (input.manifestVersion) {
     const manifest = canonicalVersion(input.manifestVersion, "source.version")
+
     if (manifest !== version) {
       throw new ActionError(
         `Version ${version} does not match alchemy.new.jsonc source.version ${manifest}. The manifest source must name this package, and a pinned source.version has to be the version being published.`,
       )
     }
   }
+
   return version
 }

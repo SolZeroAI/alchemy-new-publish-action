@@ -14,6 +14,7 @@ const target = "../../node_modules/tsrs/bin/tsrs"
 function exists(path) {
   try {
     lstatSync(path)
+
     return true
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "ENOENT") return false

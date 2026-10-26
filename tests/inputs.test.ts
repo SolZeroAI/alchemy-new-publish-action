@@ -36,12 +36,14 @@ describe("parseActionInputs", () => {
 
   it("parses lists and booleans", () => {
     assert.deepEqual(parseList("dist\n# comment\n\nnode_modules\n"), ["dist", "node_modules"])
+
     const inputs = parseActionInputs({
       package: " example-org/example-stack ",
       dryRun: "true",
       onImmutable: "skip-if-digest-matches",
       include: ["alchemy.new.jsonc", "dist"],
-    } as Parameters<typeof parseActionInputs>[0])
+    })
+
     assert.equal(inputs.packageInput, "example-org/example-stack")
     assert.equal(inputs.dryRun, true)
     assert.equal(inputs.onImmutable, "skip-if-digest-matches")

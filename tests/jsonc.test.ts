@@ -13,6 +13,7 @@ describe("parseJsonc", () => {
          comment */
       "ok": true,
     }`)
+
     assert.deepEqual(value, {
       note: "https://example.com // not a comment",
       block: "/* still a string */",
