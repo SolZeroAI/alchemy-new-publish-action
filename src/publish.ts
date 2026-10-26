@@ -8,7 +8,7 @@ import {
   MAX_MANIFEST_BYTES,
   RECOMMENDED_ARCHIVE_BYTES,
 } from "./constants.ts"
-import { ActionError } from "./errors.ts"
+import { ActionError, nodeErrorCode } from "./errors.ts"
 import { formatBytes } from "./bytes.ts"
 import type { Logger } from "./log.ts"
 import { silentLogger } from "./log.ts"
@@ -97,6 +97,7 @@ export function filesForArchive(
 
 function omittedFromArchive(file: string, manifestRelative: string | undefined): boolean {
   if (file === MANIFEST_FILENAME) return true
+
   return (
     manifestRelative !== undefined && !manifestRelative.includes("/") && file === manifestRelative
   )
@@ -111,20 +112,26 @@ function resolveManifestFile(options: {
   const packageDirectory = options.archive
     ? undefined
     : resolve(options.path ?? options.workspace ?? process.cwd())
+
   const base = packageDirectory ?? resolve(options.workspace ?? process.cwd())
+
   if (!options.manifest) return join(base, MANIFEST_FILENAME)
+
   return isAbsolute(options.manifest) ? options.manifest : resolve(base, options.manifest)
 }
 
 export async function publish(options: PublishOptions): Promise<PublishResult> {
   const log = options.log ?? silentLogger
   const registryUrl = normalizeRegistryUrl(options.registryUrl)
+
   if (registryUrl.startsWith("http://")) {
     const host = new URL(registryUrl).hostname
+
     if (host !== "localhost" && host !== "127.0.0.1") {
       log.warn(`registry-url uses http (${registryUrl}). Production is ${DEFAULT_REGISTRY_URL}.`)
     }
   }
+
   if (options.archive && options.path) {
     throw new ActionError("Pass either archive or path, not both.")
   }
@@ -135,11 +142,13 @@ export async function publish(options: PublishOptions): Promise<PublishResult> {
 
   const sizeBytes = await fileSize(prepared.archivePath)
   assertArchiveSize(sizeBytes)
+
   if (sizeBytes > RECOMMENDED_ARCHIVE_BYTES) {
     log.warn(
       `Archive is ${formatBytes(sizeBytes)}. The publisher guide says to stay near 80 MiB. The registry rejects archives over 256 MiB.`,
     )
   }
+
   await assertGzip(prepared.archivePath)
   const entries = await listArchive(prepared.archivePath)
   assertSafeEntries(entries)
@@ -148,17 +157,19 @@ export async function publish(options: PublishOptions): Promise<PublishResult> {
   assertReadyArchive(entries, loaded.manifest)
 
   const pkg = resolvePackage({
-    ...(options.packageInput ? { packageInput: options.packageInput } : {}),
-    ...(options.org ? { org: options.org } : {}),
-    ...(options.project ? { project: options.project } : {}),
+    packageInput: options.packageInput,
+    org: options.org,
+    project: options.project,
     manifestOrg: loaded.manifest.source.org,
     manifestProject: loaded.manifest.source.project,
   })
+
   const version = resolveVersion({
-    ...(options.version ? { explicit: options.version } : {}),
-    ...(options.gitRef ? { gitRef: options.gitRef } : {}),
-    ...(loaded.manifest.source.version ? { manifestVersion: loaded.manifest.source.version } : {}),
+    explicit: options.version,
+    gitRef: options.gitRef,
+    manifestVersion: loaded.manifest.source.version,
   })
+
   const sha256 = await sha256File(prepared.archivePath)
   const files = [...memberMap(entries).keys()].sort()
   const url = deployUrl(pkg.org, pkg.project, version)
@@ -167,9 +178,13 @@ export async function publish(options: PublishOptions): Promise<PublishResult> {
     `${options.dryRun ? "Dry run for" : "Publishing"} ${pkg.org}/${pkg.project}@${version} to ${registryUrl} (${formatBytes(sizeBytes)}, sha256 ${sha256}, manifest sha256 ${loaded.sha256}).`,
   )
   log.info(`${MANIFEST_FILENAME} is not in the archive. It is uploaded separately.`)
+
   for (const file of files.slice(0, 200)) log.info(`pack ${file}`)
+
   if (files.length > 200) log.info(`pack … ${files.length - 200} more files`)
+
   for (const file of prepared.excluded.slice(0, 50)) log.info(`exclude ${file}`)
+
   if (prepared.excludedCount > prepared.excluded.length) {
     log.info(`exclude … ${prepared.excludedCount - prepared.excluded.length} more paths`)
   }
@@ -195,6 +210,7 @@ export async function publish(options: PublishOptions): Promise<PublishResult> {
   if (options.dryRun) {
     await options.writeSummary?.(markdown)
     log.info("Dry run: archive was not uploaded.")
+
     return {
       org: pkg.org,
       project: pkg.project,
@@ -210,6 +226,7 @@ export async function publish(options: PublishOptions): Promise<PublishResult> {
 
   if (options.token) {
     options.mask?.(options.token)
+
     if (!options.token.startsWith("anr_")) {
       throw new ActionError(
         "The token input must be an alchemy.new API token starting with anr_. Short-lived anu_ grants are created by the OIDC exchange and cannot be pasted here.",
@@ -222,8 +239,8 @@ export async function publish(options: PublishOptions): Promise<PublishResult> {
     createRegistryClient({
       registryUrl,
       log,
-      ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
-      ...(options.sleep ? { sleep: options.sleep } : {}),
+      fetchImpl: options.fetchImpl,
+      sleep: options.sleep,
     })
 
   const outcome = await uploadArchive({
@@ -240,11 +257,11 @@ export async function publish(options: PublishOptions): Promise<PublishResult> {
     log,
     authorize: () =>
       authorize({
-        ...(options.token ? { token: options.token } : {}),
+        token: options.token,
         org: pkg.org,
         project: pkg.project,
         client,
-        ...(options.getIdToken ? { getIdToken: options.getIdToken } : {}),
+        getIdToken: options.getIdToken,
         mask: options.mask ?? (() => {}),
         log,
       }),
@@ -257,6 +274,7 @@ export async function publish(options: PublishOptions): Promise<PublishResult> {
   } else {
     log.info(`Published ${pkg.org}/${pkg.project}@${version}.`)
   }
+
   log.info(url)
 
   const finalMarkdown = renderSummary({
@@ -276,6 +294,7 @@ export async function publish(options: PublishOptions): Promise<PublishResult> {
     excludedCount: prepared.excludedCount,
     overRecommended: sizeBytes > RECOMMENDED_ARCHIVE_BYTES,
   })
+
   await options.writeSummary?.(finalMarkdown)
 
   return {
@@ -301,6 +320,7 @@ interface PreparedArchive {
 
 async function preparePrebuilt(archivePath: string, log: Logger): Promise<PreparedArchive> {
   log.info(`Using prebuilt archive ${archivePath}.`)
+
   return { archivePath, excluded: [], excludedCount: 0 }
 }
 
@@ -310,21 +330,27 @@ async function prepareDirectory(options: PublishOptions, log: Logger): Promise<P
   const manifestFile = resolveManifestFile(options)
   const loaded = await loadManifest(manifestFile)
   const manifestRelative = relativeInside(directory, manifestFile)
+
   const selection = await selectFiles(directory, {
     includes: options.include,
     excludes: options.exclude,
     defaultExcludes: options.defaultExcludes,
   })
+
   if (selection.rejected.length > 0) {
     const lines = selection.rejected.slice(0, 20).map((item) => `${item.path}: ${item.reason}`)
     throw new ActionError(`Refusing to pack forbidden files:\n${lines.join("\n")}`)
   }
+
   const files = filesForArchive(selection.files, manifestRelative)
   const links = new Map<string, string>()
+
   for (const file of files) {
     const target = selection.links.get(file)
+
     if (target !== undefined) links.set(file, target)
   }
+
   const selected = new Set(files)
   await assertPresent(
     directory,
@@ -338,6 +364,7 @@ async function prepareDirectory(options: PublishOptions, log: Logger): Promise<P
   await packFiles(directory, files, archivePath, { links })
   log.info(`Wrote ${archivePath}.`)
   const omitted = selection.files.filter((file) => omittedFromArchive(file, manifestRelative))
+
   return {
     archivePath,
     excluded: [...selection.excluded, ...omitted],
@@ -348,22 +375,27 @@ async function prepareDirectory(options: PublishOptions, log: Logger): Promise<P
 
 async function loadManifest(manifestPath: string): Promise<LoadedManifest> {
   let bytes: Buffer
+
   try {
     bytes = await readFile(manifestPath)
   } catch (error) {
-    const code = error && typeof error === "object" && "code" in error ? String(error.code) : ""
+    const code = nodeErrorCode(error)
+
     if (code === "ENOENT") {
       throw new ActionError(
         `Missing manifest at ${manifestPath}. Pass manifest, or place ${MANIFEST_FILENAME} at the package root. The manifest is uploaded separately and is not read from the archive.`,
       )
     }
+
     throw error
   }
+
   if (bytes.length > MAX_MANIFEST_BYTES) {
     throw new ActionError(
       `Manifest at ${manifestPath} is ${bytes.length} bytes, above the 256 KB limit (${MAX_MANIFEST_BYTES}). The registry returns manifest_too_large.`,
     )
   }
+
   return {
     bytes,
     sha256: createHash("sha256").update(bytes).digest("hex"),
@@ -373,9 +405,12 @@ async function loadManifest(manifestPath: string): Promise<LoadedManifest> {
 
 function relativeInside(directory: string, filePath: string): string | undefined {
   const rel = relative(directory, filePath)
+
   if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) return undefined
   const normalized = normalizeRelPath(rel)
+
   if (!normalized) return undefined
+
   return normalized
 }
 

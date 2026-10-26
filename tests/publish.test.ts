@@ -13,6 +13,7 @@ import { join } from "node:path"
 
 function recordingLogger(): Logger & { lines: string[] } {
   const lines: string[] = []
+
   return {
     lines,
     info(message) {
@@ -28,6 +29,7 @@ describe("publish", () => {
   it("dry-runs a directory, reports the archive, and does not call the registry", async () => {
     const pkg = await makePackage()
     const summaries: string[] = []
+
     try {
       const result = await publish({
         path: pkg.root,
@@ -50,6 +52,7 @@ describe("publish", () => {
           throw new Error("dry-run requested OIDC")
         },
       })
+
       assert.equal(result.dryRun, true)
       assert.equal(result.version, "1.2.3")
       assert.equal(result.org, "example-org")
@@ -81,6 +84,7 @@ describe("publish", () => {
 
   it("uses the git tag when version is omitted", async () => {
     const pkg = await makePackage()
+
     try {
       const result = await publish({
         path: pkg.root,
@@ -92,6 +96,7 @@ describe("publish", () => {
         onImmutable: "fail",
         gitRef: "refs/tags/v2.0.0",
       })
+
       assert.equal(result.version, "2.0.0")
     } finally {
       await pkg.cleanup()
@@ -101,6 +106,7 @@ describe("publish", () => {
   it("rejects an anr_ token that is some other credential, without echoing it", async () => {
     const pkg = await makePackage()
     const secret = "ghp_this-must-not-appear"
+
     try {
       await assert.rejects(
         () =>
@@ -116,10 +122,11 @@ describe("publish", () => {
             token: secret,
             mask: () => {},
           }),
-        (error: unknown) => {
-          assert.ok(error instanceof ActionError)
-          assert.match(error.message, /anr_/)
-          assert.equal(error.message.includes(secret), false)
+        (cause: unknown) => {
+          assert.ok(cause instanceof ActionError)
+          assert.match(cause.message, /anr_/)
+          assert.equal(cause.message.includes(secret), false)
+
           return true
         },
       )
@@ -131,6 +138,7 @@ describe("publish", () => {
   it("skips a publish when the stored digest matches", async () => {
     const pkg = await makePackage()
     const summaries: string[] = []
+
     try {
       const dry = await publish({
         path: pkg.root,
@@ -142,7 +150,9 @@ describe("publish", () => {
         dryRun: true,
         onImmutable: "fail",
       })
+
       let started = false
+
       const record: VersionRecord = {
         org: "example-org",
         project: "example-stack",
@@ -152,6 +162,7 @@ describe("publish", () => {
         manifestSha256: dry.manifestSha256,
         yanked: false,
       }
+
       const client: RegistryClient = {
         setToken() {},
         async exchangeOidc() {
@@ -175,6 +186,7 @@ describe("publish", () => {
         },
         async abortUpload() {},
       }
+
       const result = await publish({
         path: pkg.root,
         version: "1.2.3",
@@ -191,6 +203,7 @@ describe("publish", () => {
           summaries.push(markdown)
         },
       })
+
       assert.equal(result.skipped, true)
       assert.equal(result.sha256, dry.sha256)
       assert.equal(result.manifestSha256, dry.manifestSha256)
@@ -207,6 +220,7 @@ describe("publish", () => {
   it("fails a matching publish when on-immutable is fail", async () => {
     const pkg = await makePackage()
     const summaries: string[] = []
+
     try {
       const dry = await publish({
         path: pkg.root,
@@ -218,6 +232,7 @@ describe("publish", () => {
         dryRun: true,
         onImmutable: "fail",
       })
+
       const client: RegistryClient = {
         setToken() {},
         async exchangeOidc() {
@@ -248,6 +263,7 @@ describe("publish", () => {
         },
         async abortUpload() {},
       }
+
       await assert.rejects(
         () =>
           publish({
@@ -277,6 +293,7 @@ describe("publish", () => {
   it("names a digest mismatch instead of uploading", async () => {
     const pkg = await makePackage()
     const summaries: string[] = []
+
     try {
       const client: RegistryClient = {
         setToken() {},
@@ -307,6 +324,7 @@ describe("publish", () => {
         },
         async abortUpload() {},
       }
+
       await assert.rejects(
         () =>
           publish({
@@ -335,6 +353,7 @@ describe("publish", () => {
 
   it("skips when the version record has no manifest digest", async () => {
     const pkg = await makePackage()
+
     try {
       const dry = await publish({
         path: pkg.root,
@@ -346,6 +365,7 @@ describe("publish", () => {
         dryRun: true,
         onImmutable: "fail",
       })
+
       const client: RegistryClient = {
         setToken() {},
         async exchangeOidc() {
@@ -375,6 +395,7 @@ describe("publish", () => {
         },
         async abortUpload() {},
       }
+
       const result = await publish({
         path: pkg.root,
         version: "1.2.3",
@@ -388,6 +409,7 @@ describe("publish", () => {
         token: "anr_test",
         mask: () => {},
       })
+
       assert.equal(result.skipped, true)
     } finally {
       await pkg.cleanup()
@@ -396,6 +418,7 @@ describe("publish", () => {
 
   it("does not skip when the manifest digest differs", async () => {
     const pkg = await makePackage()
+
     try {
       const client: RegistryClient = {
         setToken() {},
@@ -413,6 +436,7 @@ describe("publish", () => {
             dryRun: true,
             onImmutable: "fail",
           })
+
           return {
             org: "example-org",
             project: "example-stack",
@@ -437,6 +461,7 @@ describe("publish", () => {
         },
         async abortUpload() {},
       }
+
       await assert.rejects(
         () =>
           publish({
@@ -461,6 +486,7 @@ describe("publish", () => {
 
   it("fails when the manifest source.version disagrees with the tag", async () => {
     const pkg = await makePackage()
+
     try {
       await writeFile(join(pkg.root, "alchemy.new.jsonc"), manifestText({ version: "9.9.9" }))
       await assert.rejects(
@@ -485,6 +511,7 @@ describe("publish", () => {
   it("warns when registry-url uses http and names the production API", async () => {
     const pkg = await makePackage()
     const log = recordingLogger()
+
     try {
       await publish({
         path: pkg.root,
@@ -511,11 +538,14 @@ describe("publish", () => {
 describe("sha256File", () => {
   it("hashes the bytes on disk", async () => {
     const pkg = await makePackage()
+
     try {
       const path = join(pkg.root, "dist/app.js")
+
       const expected = createHash("sha256")
         .update(await readFile(path))
         .digest("hex")
+
       assert.equal(await sha256File(path), expected)
     } finally {
       await pkg.cleanup()

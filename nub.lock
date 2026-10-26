@@ -29,7 +29,7 @@ importers:
         version: 24.19.2
       anti-slop:
         specifier: github:dmmulroy/anti-slop
-        version: https://codeload.github.com/dmmulroy/anti-slop/tar.gz/c44ef22ca116d0ba62a3ff663a0bd13a3f3fa40b
+        version: https://codeload.github.com/dmmulroy/anti-slop/tar.gz/13909c9e07590f5a85d93c62712259fe14a883f7
       esbuild:
         specifier: ^0.25.11
         version: 0.25.12
@@ -802,8 +802,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  anti-slop@https://codeload.github.com/dmmulroy/anti-slop/tar.gz/c44ef22ca116d0ba62a3ff663a0bd13a3f3fa40b:
-    resolution: {gitHosted: true, integrity: sha512-Vj/M0k5Bt1Q2pGdfXZ24wGXycBcvFHwJ/pjHIFl1hV8soaZKHl1lba5UXlQFY5xgwQ5TNfEWiKfsEt0yyRyVUg==, tarball: https://codeload.github.com/dmmulroy/anti-slop/tar.gz/c44ef22ca116d0ba62a3ff663a0bd13a3f3fa40b}
+  anti-slop@https://codeload.github.com/dmmulroy/anti-slop/tar.gz/13909c9e07590f5a85d93c62712259fe14a883f7:
+    resolution: {gitHosted: true, integrity: sha512-htcINVNo8eWDf9LLDoHcMhBXaw1vq4Wu1uLE38HpWxd3rZ3NTz9cbUTjddMU6nM+V6Chv/VNKJunp6wLIaSOQA==, tarball: https://codeload.github.com/dmmulroy/anti-slop/tar.gz/13909c9e07590f5a85d93c62712259fe14a883f7}
     version: 0.1.2
 
   chownr@3.0.0:
@@ -1346,7 +1346,7 @@ snapshots:
   '@typescript/typescript-win32-x64@7.0.2':
     optional: true
 
-  anti-slop@https://codeload.github.com/dmmulroy/anti-slop/tar.gz/c44ef22ca116d0ba62a3ff663a0bd13a3f3fa40b:
+  anti-slop@https://codeload.github.com/dmmulroy/anti-slop/tar.gz/13909c9e07590f5a85d93c62712259fe14a883f7:
     dependencies:
       '@oxlint/plugins': 1.78.0
 

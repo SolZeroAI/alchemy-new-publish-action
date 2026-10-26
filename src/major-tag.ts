@@ -14,14 +14,21 @@ export function floatingTagForRelease(
   packageName = PACKAGE_TAG_NAME,
 ): "v1" | undefined {
   const stableMajors: number[] = []
+
   for (const tag of tags) {
     const match = RELEASE.exec(tag)
+
     if (!match?.groups) continue
+
     if (match.groups.name !== undefined && match.groups.name !== packageName) continue
+
     if (match.groups.pre) continue
     stableMajors.push(Number(match.groups.major))
   }
+
   if (stableMajors.length === 0) return undefined
+
   if (stableMajors.every((major) => major === 1)) return "v1"
+
   return undefined
 }

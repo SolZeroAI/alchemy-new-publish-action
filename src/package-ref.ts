@@ -10,9 +10,11 @@ interface PackageRef {
 function parsePackage(input: string): PackageRef {
   const trimmed = input.trim()
   const slash = trimmed.indexOf("/")
+
   if (slash <= 0 || trimmed.indexOf("/", slash + 1) !== -1) {
     throw new ActionError(`Package must be org/project. Received ${JSON.stringify(trimmed)}.`)
   }
+
   return {
     org: assertSegment(trimmed.slice(0, slash), "org"),
     project: assertSegment(trimmed.slice(slash + 1), "project"),
@@ -25,6 +27,7 @@ function assertSegment(value: string, label: string): string {
       `Package ${label} must be 1-64 characters of letters, numbers, ".", "_", or "-", and start with a letter or number. Received ${JSON.stringify(value)}.`,
     )
   }
+
   return value
 }
 
@@ -49,20 +52,26 @@ export function resolvePackage(input: {
     org = parsed.org
     project = parsed.project
   }
+
   if (input.org) {
     const explicit = assertSegment(input.org, "org")
+
     if (input.packageInput && explicit !== org) {
       throw new ActionError(`Input org (${explicit}) does not match package (${org}/${project}).`)
     }
+
     org = explicit
   }
+
   if (input.project) {
     const explicit = assertSegment(input.project, "project")
+
     if (input.packageInput && explicit !== project) {
       throw new ActionError(
         `Input project (${explicit}) does not match package (${org}/${project}).`,
       )
     }
+
     project = explicit
   }
 
@@ -71,5 +80,6 @@ export function resolvePackage(input: {
       `alchemy.new.jsonc source is ${manifestOrg}/${manifestProject}, but the action resolved ${org}/${project}. The manifest source must name the package being published.`,
     )
   }
+
   return { org, project }
 }

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { IncomingMessage, ServerResponse } from "node:http"
 import { createServer } from "node:http"
+import { isString, type JsonValue } from "../src/record.ts"
 
 export function manifestText(options?: {
   org?: string
@@ -15,6 +16,7 @@ export function manifestText(options?: {
     ? `,
     "version": "${options.version}"`
     : ""
+
   return `{
   // ready for alchemy.new
   "$schema": "https://alchemy.new/schema/v1/project.json",
@@ -68,6 +70,7 @@ export async function makePackage(): Promise<{ root: string; cleanup: () => Prom
   await writeFile(join(root, "id_rsa"), "not-a-real-key\n")
   await writeFile(join(root, "cert.pem"), "not-a-real-pem\n")
   await writeFile(join(root, ".github/workflows/release.yml"), "name: release\n")
+
   return {
     root,
     cleanup: () => rm(root, { recursive: true, force: true }),
@@ -83,17 +86,20 @@ export async function withServer(
       chunks.push(chunk)
     })
     req.on("end", () => {
-      void Promise.resolve(handler(req, res, Buffer.concat(chunks))).catch((error: unknown) => {
+      void Promise.resolve(handler(req, res, Buffer.concat(chunks))).catch((cause: unknown) => {
         res.statusCode = 500
-        res.end(error instanceof Error ? error.message : String(error))
+        res.end(cause instanceof Error ? cause.message : String(cause))
       })
     })
   })
+
   await new Promise<void>((resolve) => {
     server.listen(0, "127.0.0.1", () => resolve())
   })
   const address = server.address()
-  if (!address || typeof address === "string") throw new Error("test server has no port")
+
+  if (!address || isString(address)) throw new Error("test server has no port")
+
   return {
     url: `http://127.0.0.1:${address.port}`,
     close: () =>
@@ -103,7 +109,7 @@ export async function withServer(
   }
 }
 
-export function json(res: ServerResponse, status: number, body: unknown): void {
+export function json(res: ServerResponse, status: number, body: JsonValue): void {
   const payload = JSON.stringify(body)
   res.statusCode = status
   res.setHeader("Content-Type", "application/json")

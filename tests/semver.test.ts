@@ -22,7 +22,7 @@ describe("resolveVersion", () => {
   it("rejects build metadata and mismatched manifest versions", () => {
     assert.throws(
       () => resolveVersion({ explicit: "1.2.3+build.1" }),
-      (error: unknown) => error instanceof ActionError && /build metadata/.test(error.message),
+      (cause: unknown) => cause instanceof ActionError && /build metadata/.test(cause.message),
     )
     assert.throws(() => resolveVersion({ gitRef: "refs/tags/v1.2.3+sha.1" }), /build metadata/)
     assert.throws(

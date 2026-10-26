@@ -12,6 +12,7 @@ export function assertArchiveSize(sizeBytes: number, cap = MAX_ARCHIVE_BYTES): v
   if (sizeBytes <= 0) {
     throw new ActionError("Archive is empty.")
   }
+
   if (sizeBytes > cap) {
     throw new ActionError(
       `Archive is ${formatBytes(sizeBytes)} (${sizeBytes} bytes), above the ${formatBytes(cap)} registry cap.`,
@@ -22,22 +23,29 @@ export function assertArchiveSize(sizeBytes: number, cap = MAX_ARCHIVE_BYTES): v
 /** Reject path traversal, `.git`, and secret files before anything is extracted. */
 export function assertSafeEntries(entries: readonly ArchiveEntry[]): void {
   const problems: string[] = []
+
   for (const entry of entries) {
     const normalized = normalizeRelPath(entry.path)
+
     if (normalized === null) {
       problems.push(`${entry.path}: path is absolute or escapes the archive root`)
       continue
     }
+
     if (normalized === "") continue
     const reason = hardRejectReason(normalized)
+
     if (reason) problems.push(reason)
+
     if (entry.type === "symlink" && entry.linkTarget) {
       if (!symlinkResolvesInside(normalized, entry.linkTarget)) {
         problems.push(`symlink ${normalized} points outside the archive (${entry.linkTarget})`)
       } else {
         const target = resolvedSymlink(normalized, entry.linkTarget)
+
         if (target) {
           const targetReason = hardRejectReason(target)
+
           if (targetReason) {
             problems.push(`symlink ${normalized} points at a forbidden path (${target})`)
           }
@@ -45,6 +53,7 @@ export function assertSafeEntries(entries: readonly ArchiveEntry[]): void {
       }
     }
   }
+
   if (problems.length > 0) {
     throw new ActionError(`Archive failed safety checks:\n${problems.slice(0, 20).join("\n")}`)
   }
@@ -56,6 +65,7 @@ export function assertSafeEntries(entries: readonly ArchiveEntry[]): void {
  */
 export function assertNoRootManifest(entries: readonly ArchiveEntry[]): void {
   const root = entries.find((entry) => normalizeRelPath(entry.path) === MANIFEST_FILENAME)
+
   if (!root) return
   throw new ActionError(
     `Archive contains ${MANIFEST_FILENAME} at the archive root. The registry rejects that copy (invalid_archive). Upload it with the manifest input instead. Nested copies of ${MANIFEST_FILENAME} are allowed.`,
@@ -88,13 +98,19 @@ function assertArchiveMember(
   missing: string,
 ): void {
   const entry = files.get(path)
+
   if (!entry) throw new ActionError(missing)
+
   if (entry.type === "file") return
+
   if (entry.type === "symlink" && entry.linkTarget) {
     const problem = symlinkProblem(path, entry.linkTarget)
+
     if (problem) throw new ActionError(problem)
+
     return
   }
+
   throw new ActionError(missing)
 }
 
@@ -111,17 +127,22 @@ export async function assertPresent(
 ): Promise<void> {
   if (selected.has(relativePath)) {
     const target = links.get(relativePath)
+
     if (target !== undefined) {
       const problem = symlinkProblem(relativePath, target)
+
       if (problem) throw new ActionError(problem)
     }
+
     return
   }
+
   if (await pathExists(join(root, relativePath))) {
     throw new ActionError(
       `${label} (${relativePath}) is in the package directory but the include/exclude rules dropped it.`,
     )
   }
+
   throw new ActionError(
     `Missing ${label} at ${relativePath}. alchemy.new does not install dependencies or build the app.`,
   )

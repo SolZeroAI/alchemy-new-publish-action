@@ -10,6 +10,7 @@ describe("parseManifest", () => {
     const manifest = parseManifest(
       manifestText({ version: "1.2.3", entrypoint: "./alchemy.run.ts" }),
     )
+
     assert.equal(manifest.schemaVersion, 1)
     assert.equal(manifest.source.org, "example-org")
     assert.equal(manifest.source.project, "example-stack")

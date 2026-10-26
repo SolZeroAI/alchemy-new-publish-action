@@ -19569,8 +19569,8 @@ var require_ignore = __commonJS({
       );
       return cut < 0 ? EMPTY : path.slice(0, cut + 1);
     };
-    var isString = (subject) => typeof subject === "string";
-    var checkPattern = (pattern) => pattern && isString(pattern) && !REGEX_INVALID_TRAILING_BACKSLASH.test(pattern);
+    var isString2 = (subject) => typeof subject === "string";
+    var checkPattern = (pattern) => pattern && isString2(pattern) && !REGEX_INVALID_TRAILING_BACKSLASH.test(pattern);
     var splitPattern = (pattern) => pattern.split(REGEX_SPLITALL_CRLF).filter(Boolean);
     var IgnoreRule = class {
       constructor(pattern, mark, body, ignoreCase, negative, prefix) {
@@ -19674,7 +19674,7 @@ var require_ignore = __commonJS({
           this._added = true;
           return;
         }
-        if (isString(pattern)) {
+        if (isString2(pattern)) {
           pattern = {
             pattern
           };
@@ -19692,7 +19692,7 @@ var require_ignore = __commonJS({
       add(pattern) {
         this._added = false;
         makeArray(
-          isString(pattern) ? splitPattern(pattern) : pattern
+          isString2(pattern) ? splitPattern(pattern) : pattern
         ).forEach(this._add, this);
         if (this._added) {
           this._literalRules = UNDEFINED;
@@ -19768,7 +19768,7 @@ var require_ignore = __commonJS({
       throw new Ctor(message);
     };
     var checkPath = (path, originalPath, doThrow) => {
-      if (!isString(path)) {
+      if (!isString2(path)) {
         return doThrow(
           `path must be a string, but got \`${originalPath}\``,
           TypeError
@@ -21230,6 +21230,13 @@ function getIDToken(aud) {
 }
 
 // src/errors.ts
+function nodeErrorCode(cause) {
+  if (!hasNodeErrorCode(cause)) return "";
+  return String(cause.code);
+}
+function hasNodeErrorCode(cause) {
+  return typeof cause === "object" && cause !== null && "code" in cause;
+}
 var ActionError = class extends Error {
   constructor(message) {
     super(message);
@@ -21264,9 +21271,34 @@ var MIN_PART_BYTES = 5 * MIB;
 var RECOMMENDED_ARCHIVE_BYTES = 80 * MIB;
 var USER_AGENT = "alchemy-new-publish-action";
 
+// src/record.ts
+function parseJsonValue(text) {
+  return JSON.parse(text);
+}
+function isString(value) {
+  return typeof value === "string";
+}
+function isNumber(value) {
+  return typeof value === "number";
+}
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function stringField(record, key) {
+  const value = record[key];
+  return isString(value) ? value : void 0;
+}
+function requiredString(record, key, label) {
+  const value = stringField(record, key);
+  if (!value || value.trim() === "") {
+    throw new Error(`${label} is missing ${key}.`);
+  }
+  return value;
+}
+
 // src/inputs.ts
 function parseList(value) {
-  const lines = typeof value === "string" || value === void 0 ? (value ?? "").split(/\r?\n/) : value;
+  const lines = isString(value) || value === void 0 ? (value ?? "").split(/\r?\n/) : value;
   return lines.map((line) => line.trim()).filter((line) => line.length > 0 && !line.startsWith("#"));
 }
 function parseBoolean(name, value, fallback) {
@@ -21287,22 +21319,31 @@ function parseActionInputs(raw) {
       `Input on-immutable must be "fail" or "skip-if-digest-matches". Received ${JSON.stringify(onImmutable)}.`
     );
   }
-  return {
-    ...blank(raw.package) ? { packageInput: blank(raw.package) } : {},
-    ...blank(raw.org) ? { org: blank(raw.org) } : {},
-    ...blank(raw.project) ? { project: blank(raw.project) } : {},
-    ...blank(raw.version) ? { version: blank(raw.version) } : {},
-    ...blank(raw.archive) ? { archive: blank(raw.archive) } : {},
-    ...blank(raw.path) ? { path: blank(raw.path) } : {},
-    ...blank(raw.manifest) ? { manifest: blank(raw.manifest) } : {},
+  const inputs = {
     include: parseList(raw.include),
     exclude: parseList(raw.exclude),
     defaultExcludes: parseBoolean("default-excludes", raw.defaultExcludes, true),
     registryUrl: blank(raw.registryUrl) ?? DEFAULT_REGISTRY_URL,
-    ...blank(raw.token) ? { token: blank(raw.token) } : {},
     dryRun: parseBoolean("dry-run", raw.dryRun, false),
     onImmutable
   };
+  const packageInput = blank(raw.package);
+  if (packageInput) inputs.packageInput = packageInput;
+  const org = blank(raw.org);
+  if (org) inputs.org = org;
+  const project = blank(raw.project);
+  if (project) inputs.project = project;
+  const version = blank(raw.version);
+  if (version) inputs.version = version;
+  const archive = blank(raw.archive);
+  if (archive) inputs.archive = archive;
+  const path = blank(raw.path);
+  if (path) inputs.path = path;
+  const manifest = blank(raw.manifest);
+  if (manifest) inputs.manifest = manifest;
+  const token = blank(raw.token);
+  if (token) inputs.token = token;
+  return inputs;
 }
 
 // src/log.ts
@@ -21350,7 +21391,7 @@ function formatBytes(bytes) {
 function parseJsonc(text) {
   const json = stripJsonc(text);
   try {
-    return JSON.parse(json);
+    return parseJsonValue(json);
   } catch (error2) {
     const message = error2 instanceof Error ? error2.message : String(error2);
     throw new Error(message);
@@ -21486,22 +21527,6 @@ function resolveVersion(input) {
   return version;
 }
 
-// src/record.ts
-function isRecord(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-function stringField(record, key) {
-  const value = record[key];
-  return typeof value === "string" ? value : void 0;
-}
-function requiredString(record, key, label) {
-  const value = stringField(record, key);
-  if (!value || value.trim() === "") {
-    throw new Error(`${label} is missing ${key}.`);
-  }
-  return value;
-}
-
 // src/paths.ts
 function normalizeRelPath(input) {
   if (input.includes("\0") || input.includes("\n") || input.includes("\r")) return null;
@@ -21601,13 +21626,13 @@ function parseManifest(text, filename = "alchemy.new.jsonc") {
     );
   }
   const providers = deployment.providers;
-  if (!Array.isArray(providers) || providers.some((item) => typeof item !== "string" || !PROVIDERS.has(item))) {
+  if (!Array.isArray(providers) || providers.some((item) => !isString(item) || !PROVIDERS.has(item))) {
     throw new ActionError(
       `${filename} deployment.providers must be an array of "cloudflare", "aws", or "other".`
     );
   }
   const defaultProvider = deployment.defaultProvider;
-  if (typeof defaultProvider !== "string" || !PROVIDERS.has(defaultProvider)) {
+  if (!isString(defaultProvider) || !PROVIDERS.has(defaultProvider)) {
     throw new ActionError(
       `${filename} deployment.defaultProvider must be "cloudflare", "aws", or "other".`
     );
@@ -21621,23 +21646,25 @@ function parseManifest(text, filename = "alchemy.new.jsonc") {
     );
   }
   let sourceVersion;
-  if (source.version !== void 0) {
-    if (typeof source.version !== "string" || source.version.trim() === "") {
+  const sourceVersionValue = source.version;
+  if (sourceVersionValue !== void 0) {
+    if (!isString(sourceVersionValue) || sourceVersionValue.trim() === "") {
       throw new ActionError(`${filename} source.version must be exact semver when it is set.`);
     }
-    sourceVersion = canonicalVersion(source.version, "source.version");
+    sourceVersion = canonicalVersion(sourceVersionValue, "source.version");
   }
+  const parsedSource = {
+    org: requiredString(source, "org", `${filename} source`),
+    project: requiredString(source, "project", `${filename} source`)
+  };
+  if (sourceVersion) parsedSource.version = sourceVersion;
   return {
     schemaVersion: 1,
     id: requiredString(value, "id", filename),
     name: requiredString(value, "name", filename),
     description: requiredString(value, "description", filename),
     publisherName: requiredString(publisher, "name", `${filename} publisher`),
-    source: {
-      org: requiredString(source, "org", `${filename} source`),
-      project: requiredString(source, "project", `${filename} source`),
-      ...sourceVersion ? { version: sourceVersion } : {}
-    },
+    source: parsedSource,
     entrypoint
   };
 }
@@ -21884,9 +21911,9 @@ function classifyPath(relativePath, options, includes, excludes) {
   return { kind: "include" };
 }
 var EXCLUDED_SAMPLE = 200;
-function fsErrorCode(error2) {
-  if (!(error2 instanceof Error) || !("code" in error2)) return "";
-  return String(error2.code);
+function fsErrorCode(cause) {
+  if (!(cause instanceof Error) || !("code" in cause)) return "";
+  return String(cause.code);
 }
 async function selectFiles(root, options) {
   assertRelativePatterns("include", options.includes);
@@ -26269,12 +26296,13 @@ async function listArchive(archivePath) {
     strict: true,
     onReadEntry(entry) {
       const path = normalizeRelPath(entry.path);
-      entries.push({
+      const packed = {
         path: path ?? entry.path,
         type: entryType(entry.type),
-        size: entry.size,
-        ...entry.linkpath ? { linkTarget: entry.linkpath } : {}
-      });
+        size: entry.size
+      };
+      if (entry.linkpath) packed.linkTarget = entry.linkpath;
+      entries.push(packed);
     }
   });
   return entries;
@@ -26302,9 +26330,9 @@ async function packFiles(root, files, destination, options = {}) {
   const statCache = /* @__PURE__ */ new Map();
   let written = 0;
   let failed;
-  const fail = (error2) => {
+  const fail = (cause) => {
     if (!failed) {
-      failed = error2 instanceof Error ? error2 : new Error(String(error2));
+      failed = cause instanceof Error ? cause : new Error(String(cause));
       queueMicrotask(() => {
         gzip.destroy();
         output.destroy();
@@ -26331,8 +26359,8 @@ async function packFiles(root, files, destination, options = {}) {
   gzip.on("end", () => {
     output.end();
   });
-  gzip.on("error", (error2) => fail(error2));
-  output.on("error", (error2) => fail(error2));
+  gzip.on("error", (cause) => fail(cause));
+  output.on("error", (cause) => fail(cause));
   const closed = new Promise((resolve3) => {
     output.once("close", () => resolve3());
   });
@@ -26389,7 +26417,7 @@ async function assertSymlinkAllowed(root, relativePath) {
   try {
     info2 = await (0, import_promises3.lstat)(absolute);
   } catch (error2) {
-    const code = typeof error2 === "object" && error2 && "code" in error2 ? String(error2.code) : "";
+    const code = nodeErrorCode(error2);
     if (code === "ENOENT") {
       throw new ActionError(`Cannot pack ${relativePath}: the file is missing.`);
     }
@@ -26443,8 +26471,8 @@ function writePackedEntry(gzip, root, relativePath, linkCache, statCache, getFai
       settle(failure ?? new ActionError(`Stopped packing at ${relativePath}.`));
     };
     gzip.on("error", onGzipError);
-    entry.on("error", (error2) => {
-      settle(error2 instanceof Error ? error2 : new Error(String(error2)));
+    entry.on("error", (cause) => {
+      settle(cause instanceof Error ? cause : new Error(String(cause)));
     });
     entry.on("end", () => settle());
     entry.on("data", (chunk) => {
@@ -26599,11 +26627,11 @@ function sleep(ms2) {
   });
 }
 var TRANSIENT_STATUS = /* @__PURE__ */ new Set([408, 429, 500, 502, 503, 504]);
-function isTransient(error2) {
-  if (error2 instanceof RegistryError) return TRANSIENT_STATUS.has(error2.status);
-  if (error2 instanceof Error) {
-    if (error2.name === "TimeoutError" || error2.name === "AbortError") return true;
-    return /fetch failed|network|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket hang up/i.test(error2.message);
+function isTransient(cause) {
+  if (cause instanceof RegistryError) return TRANSIENT_STATUS.has(cause.status);
+  if (cause instanceof Error) {
+    if (cause.name === "TimeoutError" || cause.name === "AbortError") return true;
+    return /fetch failed|network|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket hang up/i.test(cause.message);
   }
   return false;
 }
@@ -26677,7 +26705,7 @@ function createRegistryClient(options) {
     } else if (init.contentType) {
       headers.set("Content-Type", init.contentType);
     }
-    if (typeof body === "string") headers.set("Content-Length", String(Buffer.byteLength(body)));
+    if (isString(body)) headers.set("Content-Length", String(Buffer.byteLength(body)));
     if (Buffer.isBuffer(body)) headers.set("Content-Length", String(body.length));
     let response;
     try {
@@ -26782,18 +26810,15 @@ function createRegistryClient(options) {
       const uploadId = stringField(body, "uploadId");
       const partSize = body.partSize;
       const maxBytes = body.maxBytes;
-      if (!uploadId || typeof partSize !== "number" || typeof maxBytes !== "number") {
+      if (!uploadId || !isNumber(partSize) || !isNumber(maxBytes)) {
         throw new RegistryError("Start upload returned no uploadId, partSize, or maxBytes.", 200);
       }
       const contentType = stringField(body, "contentType");
       const expiresAt = stringField(body, "expiresAt");
-      return {
-        uploadId,
-        partSize,
-        maxBytes,
-        ...expiresAt ? { expiresAt } : {},
-        ...contentType ? { contentType } : {}
-      };
+      const session = { uploadId, partSize, maxBytes };
+      if (expiresAt) session.expiresAt = expiresAt;
+      if (contentType) session.contentType = contentType;
+      return session;
     },
     async uploadPart(input) {
       const path = `${packageVersionPath(input.org, input.project, input.version)}/uploads/${encodeURIComponent(input.uploadId)}/parts/${input.partNumber}`;
@@ -26824,8 +26849,8 @@ function createRegistryClient(options) {
       if (!etag) {
         throw new RegistryError(`Part ${input.partNumber} returned no etag.`, 200);
       }
-      const sizeBytes = typeof body.sizeBytes === "number" ? body.sizeBytes : input.body.length;
-      const partNumber = typeof body.partNumber === "number" ? body.partNumber : input.partNumber;
+      const sizeBytes = isNumber(body.sizeBytes) ? body.sizeBytes : input.body.length;
+      const partNumber = isNumber(body.partNumber) ? body.partNumber : input.partNumber;
       return { partNumber, etag, sizeBytes };
     },
     async uploadManifest(input) {
@@ -26848,13 +26873,11 @@ function createRegistryClient(options) {
       );
       const body = parseJson(response.text, "manifest upload");
       const sha256 = stringField(body, "sha256") ?? "";
-      const sizeBytes = typeof body.sizeBytes === "number" ? body.sizeBytes : input.body.length;
+      const sizeBytes = isNumber(body.sizeBytes) ? body.sizeBytes : input.body.length;
       const contentType = stringField(body, "contentType");
-      return {
-        sha256,
-        sizeBytes,
-        ...contentType ? { contentType } : {}
-      };
+      const uploaded = { sha256, sizeBytes };
+      if (contentType) return { ...uploaded, contentType };
+      return uploaded;
     },
     async completeUpload(input) {
       const path = `${packageVersionPath(input.org, input.project, input.version)}/uploads/${encodeURIComponent(input.uploadId)}/complete`;
@@ -26894,7 +26917,7 @@ function createRegistryClient(options) {
 }
 function parseJson(text, label) {
   try {
-    const value = JSON.parse(text);
+    const value = parseJsonValue(text);
     if (!isRecord(value)) throw new Error("response was not a JSON object");
     return value;
   } catch (error2) {
@@ -26904,30 +26927,34 @@ function parseJson(text, label) {
 }
 function parseErrorBody(text) {
   try {
-    const value = JSON.parse(text);
+    const value = parseJsonValue(text);
     if (!isRecord(value)) return void 0;
     const message = stringField(value, "message");
     const code = stringField(value, "code");
-    return {
-      ...message ? { message } : {},
-      ...code ? { code } : {}
-    };
+    const parsed = {};
+    if (message) parsed.message = message;
+    if (code) parsed.code = code;
+    return parsed;
   } catch {
     return void 0;
   }
 }
 function parseVersionRecord(body, org, project, version) {
-  return {
+  const manifestSha256 = stringField(body, "manifestSha256");
+  const contentType = stringField(body, "contentType");
+  const publishedAt = stringField(body, "publishedAt");
+  const record = {
     org: stringField(body, "org") ?? org,
     project: stringField(body, "project") ?? project,
     version: stringField(body, "version") ?? version,
     sha256: stringField(body, "sha256") ?? "",
-    ...stringField(body, "manifestSha256") ? { manifestSha256: stringField(body, "manifestSha256") } : {},
-    sizeBytes: typeof body.sizeBytes === "number" ? body.sizeBytes : 0,
-    ...stringField(body, "contentType") ? { contentType: stringField(body, "contentType") } : {},
-    yanked: body.yanked === true,
-    ...stringField(body, "publishedAt") ? { publishedAt: stringField(body, "publishedAt") } : {}
+    sizeBytes: isNumber(body.sizeBytes) ? body.sizeBytes : 0,
+    yanked: body.yanked === true
   };
+  if (manifestSha256) record.manifestSha256 = manifestSha256;
+  if (contentType) record.contentType = contentType;
+  if (publishedAt) record.publishedAt = publishedAt;
+  return record;
 }
 function parseRetryAfter(header) {
   if (!header) return void 0;
@@ -27085,14 +27112,12 @@ function decideImmutable(existing, sha256, manifestSha256, onImmutable) {
   }
   const sameManifest = recordedManifest ? ` and manifest sha256 (${manifestSha256})` : ". The version record does not include manifestSha256, so that digest was not compared";
   if (onImmutable === "skip-if-digest-matches") {
-    return {
-      record: {
-        ...existing,
-        sha256: recordedArchive,
-        ...recordedManifest ? { manifestSha256: recordedManifest } : {}
-      },
-      skipped: true
+    const record = {
+      ...existing,
+      sha256: recordedArchive
     };
+    if (recordedManifest) record.manifestSha256 = recordedManifest;
+    return { record, skipped: true };
   }
   throw new ActionError(
     `Version ${existing.version} is already published with the same archive sha256 (${sha256})${sameManifest}. Versions are immutable, so nothing was uploaded.${yanked} Set on-immutable to skip-if-digest-matches to succeed when the digests match.`
@@ -27201,13 +27226,13 @@ async function uploadArchive(options) {
     throw error2;
   }
 }
-async function rethrowOrSkip(error2, options, ensureAuth) {
-  if (!(error2 instanceof RegistryError) || error2.code !== "immutable_version") {
-    throw error2;
+async function rethrowOrSkip(cause, options, ensureAuth) {
+  if (!(cause instanceof RegistryError) || cause.code !== "immutable_version") {
+    throw cause;
   }
   await ensureAuth();
   const again = await options.client.getVersion(options.org, options.project, options.version);
-  if (!again) throw error2;
+  if (!again) throw cause;
   return decideImmutable(again, options.sha256, options.manifestSha256, options.onImmutable);
 }
 async function sendManifest(options, uploadId) {
@@ -27363,16 +27388,16 @@ async function publish(options) {
   const loaded = prepared.loaded ?? await loadManifest(resolveManifestFile(options));
   assertReadyArchive(entries, loaded.manifest);
   const pkg = resolvePackage({
-    ...options.packageInput ? { packageInput: options.packageInput } : {},
-    ...options.org ? { org: options.org } : {},
-    ...options.project ? { project: options.project } : {},
+    packageInput: options.packageInput,
+    org: options.org,
+    project: options.project,
     manifestOrg: loaded.manifest.source.org,
     manifestProject: loaded.manifest.source.project
   });
   const version = resolveVersion({
-    ...options.version ? { explicit: options.version } : {},
-    ...options.gitRef ? { gitRef: options.gitRef } : {},
-    ...loaded.manifest.source.version ? { manifestVersion: loaded.manifest.source.version } : {}
+    explicit: options.version,
+    gitRef: options.gitRef,
+    manifestVersion: loaded.manifest.source.version
   });
   const sha256 = await sha256File(prepared.archivePath);
   const files = [...memberMap(entries).keys()].sort();
@@ -27430,8 +27455,8 @@ async function publish(options) {
   const client = options.client ?? createRegistryClient({
     registryUrl,
     log,
-    ...options.fetchImpl ? { fetchImpl: options.fetchImpl } : {},
-    ...options.sleep ? { sleep: options.sleep } : {}
+    fetchImpl: options.fetchImpl,
+    sleep: options.sleep
   });
   const outcome = await uploadArchive({
     client,
@@ -27446,11 +27471,11 @@ async function publish(options) {
     onImmutable: options.onImmutable,
     log,
     authorize: () => authorize({
-      ...options.token ? { token: options.token } : {},
+      token: options.token,
       org: pkg.org,
       project: pkg.project,
       client,
-      ...options.getIdToken ? { getIdToken: options.getIdToken } : {},
+      getIdToken: options.getIdToken,
       mask: options.mask ?? (() => {
       }),
       log
@@ -27545,7 +27570,7 @@ async function loadManifest(manifestPath) {
   try {
     bytes = await (0, import_promises5.readFile)(manifestPath);
   } catch (error2) {
-    const code = error2 && typeof error2 === "object" && "code" in error2 ? String(error2.code) : "";
+    const code = nodeErrorCode(error2);
     if (code === "ENOENT") {
       throw new ActionError(
         `Missing manifest at ${manifestPath}. Pass manifest, or place ${MANIFEST_FILENAME} at the package root. The manifest is uploaded separately and is not read from the archive.`
@@ -27593,10 +27618,12 @@ async function run() {
       dryRun: getInput("dry-run"),
       onImmutable: getInput("on-immutable")
     });
+    const gitRef = process.env.GITHUB_REF;
+    const workspace = process.env.GITHUB_WORKSPACE;
     const result = await publish({
       ...inputs,
-      ...process.env.GITHUB_REF ? { gitRef: process.env.GITHUB_REF } : {},
-      ...process.env.GITHUB_WORKSPACE ? { workspace: process.env.GITHUB_WORKSPACE } : {},
+      gitRef: gitRef ? gitRef : void 0,
+      workspace: workspace ? workspace : void 0,
       getIdToken: (audience) => getIDToken(audience),
       mask: (secret) => {
         setSecret(secret);

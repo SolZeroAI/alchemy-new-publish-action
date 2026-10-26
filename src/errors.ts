@@ -1,3 +1,14 @@
+/** Node syscall failures carry a string `code`. Other throws do not. */
+export function nodeErrorCode(cause: unknown): string {
+  if (!hasNodeErrorCode(cause)) return ""
+
+  return String(cause.code)
+}
+
+function hasNodeErrorCode(cause: unknown): cause is { code: unknown } {
+  return typeof cause === "object" && cause !== null && "code" in cause
+}
+
 /** Failures a publisher can act on. Unexpected bugs stay plain Error instances. */
 export class ActionError extends Error {
   constructor(message: string) {

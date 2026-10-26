@@ -7,7 +7,9 @@ import { publish } from "./publish.ts"
 export async function run(): Promise<void> {
   try {
     const token = core.getInput("token")
+
     if (token) core.setSecret(token)
+
     const inputs = parseActionInputs({
       package: core.getInput("package"),
       org: core.getInput("org"),
@@ -24,10 +26,14 @@ export async function run(): Promise<void> {
       dryRun: core.getInput("dry-run"),
       onImmutable: core.getInput("on-immutable"),
     })
+
+    const gitRef = process.env.GITHUB_REF
+    const workspace = process.env.GITHUB_WORKSPACE
+
     const result = await publish({
       ...inputs,
-      ...(process.env.GITHUB_REF ? { gitRef: process.env.GITHUB_REF } : {}),
-      ...(process.env.GITHUB_WORKSPACE ? { workspace: process.env.GITHUB_WORKSPACE } : {}),
+      gitRef: gitRef ? gitRef : undefined,
+      workspace: workspace ? workspace : undefined,
       getIdToken: (audience) => core.getIDToken(audience),
       mask: (secret) => {
         core.setSecret(secret)
@@ -51,6 +57,7 @@ export async function run(): Promise<void> {
         }
       },
     })
+
     core.setOutput("version", result.version)
     core.setOutput("sha256", result.sha256)
     core.setOutput("manifest-sha256", result.manifestSha256)
@@ -58,9 +65,11 @@ export async function run(): Promise<void> {
     core.setOutput("url", result.url)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+
     if (error instanceof Error && !(error instanceof ActionError) && error.stack) {
       core.info(redact(error.stack))
     }
+
     core.setFailed(redact(message))
   }
 }

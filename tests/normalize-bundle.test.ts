@@ -3,8 +3,10 @@ import { test } from "node:test"
 import { normalizeBundle, stableModulePath } from "../scripts/normalize-bundle.mts"
 
 const stable = "node_modules/minipass/index.js"
+
 const local =
   "../home/ubuntu/.cache/nub/pm/store/v1/minipass@7.1.3-cb4055c977da96c6/node_modules/minipass/index.js"
+
 const ci = "node_modules/.store/minipass@7.1.3/node_modules/minipass/index.js"
 
 test("maps both nub store layouts to the package path", () => {
