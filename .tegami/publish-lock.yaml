@@ -1,10 +1,10 @@
 core:changelogs:
-  - content: "---\npackages:\n  npm:alchemy-new-publish-action:\n    type: patch\n---\n\n## What changed\n\nThe 1.0.1 release failed to download on runners because of a dangling tracked symlink. That symlink is removed.\n"
-    filename: 2026-10-23-remove-dangling-symlink.md
+  - content: "---\npackages:\n  npm:alchemy-new-publish-action:\n    type: patch\n---\n\n## What changed\n\nDevelopment typecheck uses tsrs 0.20.0-ts7.1.0-beta. The editor language service uses that package's tsdk launcher at `./node_modules/tsrs/tsdk`. The install script that created `.vscode/tsrs/tsgo` is removed.\n"
+    filename: 2026-10-26-tsrs-0.20-tsdk.md
     v: 0.0.0
 core:packages:
   - changelogIds:
-      - 2026-10-23-remove-dangling-symlink.md
+      - 2026-10-26-tsrs-0.20-tsdk.md
     id: npm:alchemy-new-publish-action
     updated: true
 npm:packages:
