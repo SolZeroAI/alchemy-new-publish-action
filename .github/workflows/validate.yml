@@ -2,6 +2,11 @@ name: Validate
 
 on:
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
     branches:
       - master
   push:
@@ -19,6 +24,7 @@ concurrency:
 jobs:
   validate:
     name: Typecheck, lint, format, and check dist
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -57,6 +63,7 @@ jobs:
 
   pack-large:
     name: Pack a large symlink tree
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
