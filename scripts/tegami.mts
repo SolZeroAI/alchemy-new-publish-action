@@ -1,12 +1,9 @@
-import { writeFile } from "node:fs/promises"
-import { join } from "node:path"
 import { tegami } from "tegami"
 import { runCli } from "tegami/cli"
 import { github } from "tegami/plugins/github"
 import { actionRelease } from "./action-release.mts"
 
 const repository = process.env.GITHUB_REPOSITORY?.trim() || "SolZeroAI/alchemy-new-publish-action"
-const publishedPackageId = "npm:alchemy-new-publish-action"
 
 const release = tegami({
   conventionalCommits: false,
@@ -38,18 +35,6 @@ const release = tegami({
         branch: "tegami/version-packages",
       },
     }),
-    {
-      name: "root-version-file",
-      async applyDraft(draft) {
-        const pkg = this.graph.get(publishedPackageId)
-
-        if (!pkg) return
-        const nextVersion = draft.getPackageDraft(pkg.id)?.bumpVersion(pkg)
-
-        if (!nextVersion) return
-        await writeFile(join(this.cwd, "VERSION"), `${nextVersion}\n`)
-      },
-    },
     actionRelease(),
   ],
 })
