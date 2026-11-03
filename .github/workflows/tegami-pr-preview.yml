@@ -15,7 +15,7 @@ jobs:
   preview:
     name: Build release preview
     if: github.event.pull_request.draft != true
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
       - name: Checkout pull request
