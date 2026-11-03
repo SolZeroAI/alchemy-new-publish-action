@@ -2,7 +2,7 @@
 
 This repository is a JavaScript action. The runner starts `dist/index.cjs` with Node 24. Source lives in `src/` and is bundled with esbuild as CommonJS, because `@actions/core` loads Node builtins through `require`. The package itself is ESM so tests can import `src/` directly. The `.cjs` extension keeps the bundle CommonJS.
 
-Local development and CI use Node `24.15.0` (`engines` is `>=24.15.0 <25`). The action runtime stays `node24`. The package manager is nub `0.9.6` (`packageManager` and `devEngines.packageManager`). That is an intentional lead on the Shared Project DNA pin, which is nub `0.4.11`.
+Local development and CI use Node `24.15.0` (`engines` is `>=24.15.0 <25`). The action runtime stays `node24`. The package manager is nub `0.9.6` (`packageManager` and `devEngines.packageManager`).
 
 ```sh
 nub install --frozen-lockfile
@@ -16,7 +16,7 @@ node --import tsx scripts/pack-large.mjs
 
 `nub run check` typechecks with `tsrs --noEmit`, runs oxlint, checks formatting with oxfmt, runs the unit tests, and builds `dist/index.cjs`. Commit `dist/index.cjs` with the source change. CI rejects a pull request whose bundle does not match `nub run build`.
 
-`nub.lock` is the lockfile. Do not add `package-lock.json`; nub stays in npm mode while that file exists. Do not add ESLint, Prettier, Biome, or dprint. Lint and format are oxlint `1.87.0` and oxfmt `0.72.0`. `anti-slop` is installed from `github:dmmulroy/anti-slop`. The generic rules, including the rules added after the first install, are errors. `no-runtime-typeof` allows `typeof` only inside a type predicate (`allowInTypeGuards`). The companion `oxc/no-accumulating-spread` rule is an error. Effect rules stay off because this package does not use Effect.
+`nub.lock` is the lockfile. Do not add `package-lock.json`; nub stays in npm mode while that file exists. Do not add ESLint, Prettier, Biome, or dprint. Lint and format are oxlint `1.90.0` and oxfmt `0.75.0`. `anti-slop` is installed from `github:dmmulroy/anti-slop`. The generic rules, including the rules added after the first install, are errors. `no-runtime-typeof` allows `typeof` only inside a type predicate (`allowInTypeGuards`). The companion `oxc/no-accumulating-spread` rule is an error. Effect rules stay off because this package does not use Effect.
 
 ## Why this is a JavaScript action
 
@@ -48,7 +48,7 @@ One paragraph.
 
 When a pull request does not change the published action, add the GitHub label `release:none` and do not add a `.tegami/` entry. The label has to exist on the repository before Tegami will honor it.
 
-`.github/workflows/release.yml` runs after the Validate workflow succeeds on a push to `master`. The job mints a GitHub App installation token with `actions/create-github-app-token`, pinned by commit SHA. Secrets `RELEASE_APP_ID` and `RELEASE_APP_PRIVATE_KEY` identify the app. The token is limited to this repository and requests contents write and pull requests write. Checkout and `nub run tegami ci` use that token. The floating `v1` tag move uses the same token.
+`.github/workflows/release.yml` runs after the Validate workflow succeeds on a push to `master`. The job mints a GitHub App installation token with `actions/create-github-app-token@v3`. Secrets `RELEASE_APP_ID` and `RELEASE_APP_PRIVATE_KEY` identify the app. The token is limited to this repository and requests contents write and pull requests write. Checkout and `nub run tegami ci` use that token. The floating `v1` tag move uses the same token.
 
 1. A push that adds changelog files versions the package and opens a pull request from `tegami/version-packages` onto `master`. The app opens that pull request, so GitHub starts Validate and Tegami PR Preview.
 2. Merging that pull request leaves a publish lock on `master`. The next run creates the GitHub release and the immutable tag `alchemy-new-publish-action@1.2.3`. `scripts/action-release.mts` does that step. Tegami's npm publish does not run for this private package.
