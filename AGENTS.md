@@ -14,6 +14,9 @@ This repository is the GitHub Action `alchemy-new-publish-action`. It packs a re
 - The package is private. Tegami versions it and opens the GitHub release. Do not publish it to npm.
 - After a change under `src/`, rebuild `dist/index.cjs` and run `nub run check-dist`.
 - Do not print `anr_` tokens, `anu_` grants, or OIDC JWTs.
+- Lint uses the shared `oxlint-plugin-solzero` config in `oxlint.config.ts`. Fix a violation instead of turning its rule off.
+- Renovate opens dependency updates with the shared `SolZeroAI/renovate-config` preset. Do not add Dependabot version updates.
+- Skills live in `.agents/skills`. `.claude/skills` links to them, and `skills-lock.json` records their sources.
 
 ## Pull requests
 

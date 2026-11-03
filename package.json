@@ -10,8 +10,8 @@
     "check-dist": "nub run build && git diff --exit-code -- dist",
     "format": "oxfmt --check",
     "format:fix": "oxfmt",
-    "lint": "NODE_OPTIONS='--import tsx' oxlint",
-    "lint:fix": "NODE_OPTIONS='--import tsx' oxlint --fix",
+    "lint": "oxlint --deny-warnings",
+    "lint:fix": "oxlint --fix",
     "test": "node --import tsx --test tests/**/*.test.ts",
     "tegami": "tsx scripts/tegami.mts",
     "typecheck": "tsrs --noEmit"
@@ -23,12 +23,11 @@
     "tar": "^7.5.22"
   },
   "devDependencies": {
-    "@oxlint/plugins": "1.90.0",
     "@types/node": "^24.10.1",
-    "anti-slop": "github:dmmulroy/anti-slop",
     "esbuild": "^0.25.11",
     "oxfmt": "0.75.0",
     "oxlint": "1.90.0",
+    "oxlint-plugin-solzero": "0.1.0",
     "tegami": "1.5.0",
     "tsrs": "0.20.1-ts7.1.0-beta",
     "tsx": "^4.20.6",
