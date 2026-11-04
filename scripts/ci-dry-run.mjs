@@ -128,6 +128,14 @@ assert(/sha256<<[\s\S]*[0-9a-f]{64}/.test(dry.output), "sha256 output missing")
 
 assert(/manifest-sha256<<[\s\S]*[0-9a-f]{64}/.test(dry.output), "manifest-sha256 output missing")
 
+assert(/file-count<<[\s\S]*[0-9]+/.test(dry.output), "file-count output missing")
+
+assert(/size-bytes<<[\s\S]*[0-9]+/.test(dry.output), "size-bytes output missing")
+
+assert(dry.summary.includes("| file-count |"), "summary did not include file-count")
+
+assert(dry.summary.includes("| size-bytes |"), "summary did not include size-bytes")
+
 assert(dry.summary.includes("Dry run"), "summary did not say dry run")
 
 assert(
