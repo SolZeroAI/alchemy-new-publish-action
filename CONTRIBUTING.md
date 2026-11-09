@@ -2,7 +2,7 @@
 
 This repository is a JavaScript action. The runner starts `dist/index.cjs` with Node 24. Source lives in `src/` and is bundled with esbuild as CommonJS, because `@actions/core` loads Node builtins through `require`. The package itself is ESM so tests can import `src/` directly. The `.cjs` extension keeps the bundle CommonJS.
 
-Local development and CI use Node `24.15.0` (`engines` is `>=24.15.0 <25`). The action runtime stays `node24`. The package manager is nub `0.9.6` (`packageManager` and `devEngines.packageManager`).
+Local development and CI use Node `24.15.0` (`engines` is `>=24.15.0 <25`). The action runtime stays `node24`. The package manager is nub `0.10.0` (`packageManager` and `devEngines.packageManager`).
 
 ```sh
 nub install --frozen-lockfile

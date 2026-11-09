@@ -234,6 +234,6 @@ Other readings, where the contract was loose:
 
 ## Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). The action is JavaScript for the `node24` runner, bundled to `dist/index.cjs`. Development uses Node 24.15.0 and nub 0.9.6. CI typechecks, lints with oxlint, checks formatting with oxfmt, tests, and fails if the bundle is stale. It also dry-runs the bundle against `fixtures/ready-package`, checks that a prebuilt archive containing `.git` is rejected, and checks that a prebuilt archive with `alchemy.new.jsonc` at its root is rejected. Releases are cut by Tegami after Validate succeeds on `master`. The floating `v1` tag moves only for a stable 1.x release.
+See [CONTRIBUTING.md](CONTRIBUTING.md). The action is JavaScript for the `node24` runner, bundled to `dist/index.cjs`. Development uses Node 24.15.0 and nub 0.10.0. CI typechecks, lints with oxlint, checks formatting with oxfmt, tests, and fails if the bundle is stale. It also dry-runs the bundle against `fixtures/ready-package`, checks that a prebuilt archive containing `.git` is rejected, and checks that a prebuilt archive with `alchemy.new.jsonc` at its root is rejected. Releases are cut by Tegami after Validate succeeds on `master`. The floating `v1` tag moves only for a stable 1.x release.
 
 [Security reports](SECURITY.md) go through GitHub private vulnerability reporting.
