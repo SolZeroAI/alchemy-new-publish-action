@@ -6,6 +6,28 @@
       "sourceType": "github",
       "skillPath": "skills/nub/SKILL.md",
       "computedHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "oxfmt": {
+      "source": "delexw/claude-code-misc",
+      "sourceType": "github",
+      "skillPath": "skills/oxfmt/SKILL.md",
+      "computedHash": "dd12b7e710cf038d142d0d95caf977726d44f87caf1fcde2f19b2c69b03c2c9b"
+    },
+    "oxlint": {
+      "source": "delexw/claude-code-misc",
+      "sourceType": "github",
+      "skillPath": "skills/oxlint/SKILL.md",
+      "computedHash": "44808aefb361ada1250783eb31ccb20aa020e2c61466e52f53efb10ce20d793b"
+    },
+    "tegami": {
+      "source": "./.agents/skills/tegami",
+      "sourceType": "local",
+      "computedHash": "9a44ade85f486309e9a1b937cd827fb15222de8350d28943e93d250000ae9a6b"
+    },
+    "tsrs": {
+      "source": "./.agents/skills/tsrs",
+      "sourceType": "local",
+      "computedHash": "2320528d3a9311923664fbc8693a359941cabb02ec9204b8a107d5b37296ee42"
     }
   }
 }
