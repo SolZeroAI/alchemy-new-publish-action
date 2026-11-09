@@ -2,7 +2,7 @@
 
 This repository is a JavaScript action. The runner starts `dist/index.cjs` with Node 24. Source lives in `src/` and is bundled with esbuild as CommonJS, because `@actions/core` loads Node builtins through `require`. The package itself is ESM so tests can import `src/` directly. The `.cjs` extension keeps the bundle CommonJS.
 
-Local development and CI use Node `24.15.0` (`engines` is `>=24.15.0 <25`). The action runtime stays `node24`. The package manager is nub `0.9.6` (`packageManager` and `devEngines.packageManager`).
+Local development and CI use Node `24.15.0` (`engines` is `>=24.15.0 <25`). The action runtime stays `node24`. The package manager is nub `0.10.0` (`packageManager` and `devEngines.packageManager`).
 
 ```sh
 nub install --frozen-lockfile
@@ -16,7 +16,7 @@ node --import tsx scripts/pack-large.mjs
 
 `nub run check` typechecks with `tsrs --noEmit`, runs oxlint, checks formatting with oxfmt, runs the unit tests, and builds `dist/index.cjs`. Commit `dist/index.cjs` with the source change. CI rejects a pull request whose bundle does not match `nub run build`.
 
-`nub.lock` is the lockfile. Do not add `package-lock.json`; nub stays in npm mode while that file exists. Do not add ESLint, Prettier, Biome, or dprint. Lint and format are oxlint `1.90.0` and oxfmt `0.75.0`. `anti-slop` is installed from `github:dmmulroy/anti-slop`. The generic rules, including the rules added after the first install, are errors. `no-runtime-typeof` allows `typeof` only inside a type predicate (`allowInTypeGuards`). The companion `oxc/no-accumulating-spread` rule is an error. Effect rules stay off because this package does not use Effect.
+`nub.lock` is the lockfile. Do not add `package-lock.json`; nub stays in npm mode while that file exists. Do not add ESLint, Prettier, Biome, or dprint. Lint and format are oxlint `1.93.0` and oxfmt `0.78.0`. `anti-slop` is installed from `github:dmmulroy/anti-slop`. The generic rules, including the rules added after the first install, are errors. `no-runtime-typeof` allows `typeof` only inside a type predicate (`allowInTypeGuards`). The companion `oxc/no-accumulating-spread` rule is an error. Effect rules stay off because this package does not use Effect.
 
 ## Why this is a JavaScript action
 
