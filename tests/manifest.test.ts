@@ -30,6 +30,28 @@ describe("parseManifest", () => {
   })
 })
 
+describe("parseManifest icon and tags", () => {
+  it("accepts an icon and up to 3 tags", () => {
+    const text = manifestText({
+      extra: '"icon": "https://example.com/icon.png", "tags": ["self-hosted", "web"]',
+    })
+
+    assert.equal(parseManifest(text).name.length > 0, true)
+  })
+
+  it("rejects 4 tags, an invalid tag, and a repeated tag", () => {
+    assert.throws(
+      () => parseManifest(manifestText({ extra: '"tags": ["a", "b", "c", "d"]' })),
+      /tags lists 4 tags/,
+    )
+    assert.throws(
+      () => parseManifest(manifestText({ extra: '"tags": ["Self Hosted"]' })),
+      /lowercase letters/,
+    )
+    assert.throws(() => parseManifest(manifestText({ extra: '"tags": ["web", "web"]' })), /unique/)
+  })
+})
+
 describe("resolvePackage", () => {
   const manifest = { manifestOrg: "example-org", manifestProject: "example-stack" }
 

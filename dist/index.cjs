@@ -21572,12 +21572,36 @@ function resolvedSymlink(fromPath, target) {
 
 // src/manifest.ts
 var PROVIDERS = /* @__PURE__ */ new Set(["cloudflare", "aws", "other"]);
+var MAX_TAGS = 3;
+var MAX_TAG_LENGTH = 24;
+var TAG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+function checkTags(manifest, filename) {
+  const tags = manifest.tags;
+  if (tags === void 0) return;
+  const names = Array.isArray(tags) ? tags.filter(isString) : [];
+  if (!Array.isArray(tags) || names.length !== tags.length) {
+    throw new ActionError(`${filename} tags must be an array of strings.`);
+  }
+  if (names.length > MAX_TAGS) {
+    throw new ActionError(`${filename} tags lists ${names.length} tags. The limit is ${MAX_TAGS}.`);
+  }
+  const invalid = names.filter((tag) => tag.length > MAX_TAG_LENGTH || !TAG_PATTERN.test(tag));
+  if (invalid.length > 0) {
+    throw new ActionError(
+      `${filename} tags must be at most ${MAX_TAG_LENGTH} lowercase letters, digits, and single hyphens. Invalid: ${invalid.join(", ")}.`
+    );
+  }
+  if (new Set(names).size !== names.length) {
+    throw new ActionError(`${filename} tags must be unique.`);
+  }
+}
 var KNOWN_KEYS = /* @__PURE__ */ new Set([
   "$schema",
   "schemaVersion",
   "id",
   "name",
   "description",
+  "icon",
   "publisher",
   "source",
   "deployment",
@@ -21610,6 +21634,10 @@ function parseManifest(text, filename = "alchemy.new.jsonc") {
   if (value.schemaVersion !== 1) {
     throw new ActionError(`${filename} schemaVersion must be 1.`);
   }
+  if (value.icon !== void 0 && !isString(value.icon)) {
+    throw new ActionError(`${filename} icon must be an https:// URL string.`);
+  }
+  checkTags(value, filename);
   const publisher = value.publisher;
   if (!isRecord(publisher)) {
     throw new ActionError(`${filename} publisher must be an object with a name.`);
