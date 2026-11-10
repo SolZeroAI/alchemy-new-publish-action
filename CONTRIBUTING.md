@@ -16,7 +16,7 @@ node --import tsx scripts/pack-large.mjs
 
 `nub run check` typechecks with `tsrs --noEmit`, runs oxlint, checks formatting with oxfmt, runs the unit tests, and builds `dist/index.cjs`. Commit `dist/index.cjs` with the source change. CI rejects a pull request whose bundle does not match `nub run build`.
 
-`nub.lock` is the lockfile. Do not add `package-lock.json`; nub stays in npm mode while that file exists. Do not add ESLint, Prettier, Biome, or dprint. Lint and format are oxlint `1.93.0` and oxfmt `0.78.0`. `anti-slop` is installed from `github:dmmulroy/anti-slop`. The generic rules, including the rules added after the first install, are errors. `no-runtime-typeof` allows `typeof` only inside a type predicate (`allowInTypeGuards`). The companion `oxc/no-accumulating-spread` rule is an error. Effect rules stay off because this package does not use Effect.
+`nub.lock` is the lockfile. Do not add `package-lock.json`; nub stays in npm mode while that file exists. Do not add ESLint, Prettier, Biome, or dprint. Lint and format are oxlint `1.93.0` and oxfmt `0.78.0`. `oxlint.config.ts` extends `recommended` from `oxlint-plugin-solzero`. That config loads anti-slop from the plugin, enables every anti-slop rule as an error, and enables `oxc/no-accumulating-spread`. A plugin update that adds an anti-slop rule enables it here too. `no-runtime-typeof` allows `typeof` only inside a type predicate (`allowInTypeGuards`). This package has no Effect code, so the config does not call `effectRules()`. The shared config still enables the anti-slop Effect rules.
 
 ## Why this is a JavaScript action
 
