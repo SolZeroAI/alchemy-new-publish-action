@@ -8,8 +8,8 @@ Local development and CI use Node `24.15.0` (`engines` is `>=24.15.0 <25`). The 
 nub install --frozen-lockfile
 nub run check
 nub run check-dist
-node scripts/ci-dry-run.mjs
-node --import tsx scripts/pack-large.mjs
+nub scripts/ci-dry-run.mjs
+nub scripts/pack-large.mjs
 ```
 
 `.vscode/settings.json` sets `js/ts.experimental.useTsgo` to true and `js/ts.tsdk.path` to `./node_modules/tsrs/tsdk`. That path is the tsrs tsdk launcher shipped with the package. `.vscode/tsrs/` stays gitignored so a leftover local link is not committed. Do not commit a symlink into `node_modules`. A tracked symlink makes GitHub Actions stop while it copies the action.
@@ -24,7 +24,7 @@ Publishing is a multipart upload with sha256 checks, retries, JSONC parsing, and
 
 Dependencies are `@actions/core` (inputs, outputs, masking, OIDC, job summary), `tar` (archive entries and listing), `minizlib` (gzip for the pack stream), and `ignore` (gitignore include/exclude patterns). Tegami (`tegami` 1.5.0) versions and releases the repository. The registry client uses `fetch`.
 
-Packing does not use `tar.create`. That scheduler deadlocks on hardlinked trees and does not pause gzip when the file writer is full. `src/archive.ts` writes one entry at a time into a gzip stream that honors backpressure, then stores the `.tar.gz` in a temp file. `node --import tsx scripts/pack-large.mjs` packs a synthetic tree over 256 MiB uncompressed and checks that the gzip, sha256, and symlink entries come back. CI runs it as its own job.
+Packing does not use `tar.create`. That scheduler deadlocks on hardlinked trees and does not pause gzip when the file writer is full. `src/archive.ts` writes one entry at a time into a gzip stream that honors backpressure, then stores the `.tar.gz` in a temp file. `nub scripts/pack-large.mjs` packs a synthetic tree over 256 MiB uncompressed and checks that the gzip, sha256, and symlink entries come back. CI runs it as its own job.
 
 ## Releases
 
