@@ -16,6 +16,12 @@ function stripJsonc(text: string): string {
   return stripTrailingCommas(stripComments(text))
 }
 
+function takeString(text: string, start: number) {
+  const end = readString(text, start)
+
+  return { slice: text.slice(start, end), end }
+}
+
 function stripComments(text: string): string {
   let out = ""
   let i = 0
@@ -24,9 +30,9 @@ function stripComments(text: string): string {
     const char = text[i]
 
     if (char === '"') {
-      const end = readString(text, i)
-      out += text.slice(i, end)
-      i = end
+      const string = takeString(text, i)
+      out += string.slice
+      i = string.end
       continue
     }
 
@@ -63,9 +69,9 @@ function stripTrailingCommas(text: string): string {
     const char = text[i]
 
     if (char === '"') {
-      const end = readString(text, i)
-      out += text.slice(i, end)
-      i = end
+      const string = takeString(text, i)
+      out += string.slice
+      i = string.end
       continue
     }
 

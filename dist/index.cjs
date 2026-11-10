@@ -21404,15 +21404,19 @@ function parseJsonc(text) {
 function stripJsonc(text) {
   return stripTrailingCommas(stripComments(text));
 }
+function takeString(text, start) {
+  const end = readString(text, start);
+  return { slice: text.slice(start, end), end };
+}
 function stripComments(text) {
   let out = "";
   let i = 0;
   while (i < text.length) {
     const char = text[i];
     if (char === '"') {
-      const end = readString(text, i);
-      out += text.slice(i, end);
-      i = end;
+      const string = takeString(text, i);
+      out += string.slice;
+      i = string.end;
       continue;
     }
     if (char === "/" && text[i + 1] === "/") {
@@ -21440,9 +21444,9 @@ function stripTrailingCommas(text) {
   while (i < text.length) {
     const char = text[i];
     if (char === '"') {
-      const end = readString(text, i);
-      out += text.slice(i, end);
-      i = end;
+      const string = takeString(text, i);
+      out += string.slice;
+      i = string.end;
       continue;
     }
     if (char === ",") {
@@ -21552,19 +21556,18 @@ function normalizeRelPath(input) {
   }
   return parts.join("/");
 }
-function symlinkResolvesInside(fromPath, target) {
-  if (target.startsWith("/") || /^[A-Za-z]:[\\/]/.test(target)) return false;
-  const slash = fromPath.lastIndexOf("/");
-  const dir = slash === -1 ? "" : fromPath.slice(0, slash);
-  const joined = dir ? `${dir}/${target.replace(/\\/g, "/")}` : target.replace(/\\/g, "/");
-  return normalizeRelPath(joined) !== null;
-}
-function resolvedSymlink(fromPath, target) {
-  if (!symlinkResolvesInside(fromPath, target)) return null;
+function linkInsidePackage(fromPath, target) {
+  if (target.startsWith("/") || /^[A-Za-z]:[\\/]/.test(target)) return null;
   const slash = fromPath.lastIndexOf("/");
   const dir = slash === -1 ? "" : fromPath.slice(0, slash);
   const joined = dir ? `${dir}/${target.replace(/\\/g, "/")}` : target.replace(/\\/g, "/");
   return normalizeRelPath(joined);
+}
+function symlinkResolvesInside(fromPath, target) {
+  return linkInsidePackage(fromPath, target) !== null;
+}
+function resolvedSymlink(fromPath, target) {
+  return linkInsidePackage(fromPath, target);
 }
 
 // src/manifest.ts
@@ -22085,10 +22088,6 @@ function classifyPath(relativePath, options, includes, excludes) {
   return { kind: "include" };
 }
 var EXCLUDED_SAMPLE = 200;
-function fsErrorCode(cause) {
-  if (!(cause instanceof Error) || !("code" in cause)) return "";
-  return String(cause.code);
-}
 async function selectFiles(root, options) {
   assertRelativePatterns("include", options.includes);
   assertRelativePatterns("exclude", options.excludes);
@@ -22112,20 +22111,24 @@ async function selectFiles(root, options) {
   const noteRejected = (path, reason) => {
     rejected.push({ path, reason });
   };
+  function skipped(rel) {
+    const decision = classifyPath(rel, options, includes, excludes);
+    if (decision.kind === "exclude") {
+      noteExcluded(rel);
+      return true;
+    }
+    if (decision.kind === "reject") {
+      noteRejected(rel, decision.reason);
+      return true;
+    }
+    return false;
+  }
   async function walkLinked(realDir, logicalDir) {
     const entries = await (0, import_promises2.readdir)((0, import_node_path3.join)(root, realDir), { withFileTypes: true });
     for (const entry of entries) {
       const logical = `${logicalDir}/${entry.name}`;
       const real = `${realDir}/${entry.name}`;
-      const decision = classifyPath(logical, options, includes, excludes);
-      if (decision.kind === "exclude") {
-        noteExcluded(logical);
-        continue;
-      }
-      if (decision.kind === "reject") {
-        noteRejected(logical, decision.reason);
-        continue;
-      }
+      if (skipped(logical)) continue;
       if (entry.isSymbolicLink()) {
         const target = await (0, import_promises2.readlink)((0, import_node_path3.join)(root, real));
         const resolved = packageRelativeTarget(root, real, target);
@@ -22177,7 +22180,7 @@ async function selectFiles(root, options) {
     try {
       info2 = await (0, import_promises2.stat)((0, import_node_path3.join)(root, resolved));
     } catch (error2) {
-      const code = fsErrorCode(error2);
+      const code = nodeErrorCode(error2);
       if (code === "ENOENT") return false;
       if (code === "ELOOP") {
         noteRejected(rel, `symlink ${rel} points at itself (${target})`);
@@ -22194,15 +22197,7 @@ async function selectFiles(root, options) {
     const entries = await (0, import_promises2.readdir)(absolute, { withFileTypes: true });
     for (const entry of entries) {
       const rel = relDir === "" ? entry.name : `${relDir}/${entry.name}`;
-      const decision = classifyPath(rel, options, includes, excludes);
-      if (decision.kind === "exclude") {
-        noteExcluded(rel);
-        continue;
-      }
-      if (decision.kind === "reject") {
-        noteRejected(rel, decision.reason);
-        continue;
-      }
+      if (skipped(rel)) continue;
       if (entry.isSymbolicLink()) {
         if (rel === ALCHEMY_PACKAGE_PATH && await expandAlchemyLink(rel)) continue;
         const target = await (0, import_promises2.readlink)((0, import_node_path3.join)(root, rel));

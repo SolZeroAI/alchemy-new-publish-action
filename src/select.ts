@@ -3,7 +3,7 @@ import { readdir, readlink, stat } from "node:fs/promises"
 import { join } from "node:path"
 import ignore from "ignore"
 import { ALCHEMY_PACKAGE_PATH } from "./constants.ts"
-import { ActionError } from "./errors.ts"
+import { ActionError, nodeErrorCode } from "./errors.ts"
 import {
   packageRelativeTarget,
   relativeArchiveLink,
@@ -94,12 +94,6 @@ export function classifyPath(
 
 const EXCLUDED_SAMPLE = 200
 
-function fsErrorCode(cause: unknown): string {
-  if (!(cause instanceof Error) || !("code" in cause)) return ""
-
-  return String(cause.code)
-}
-
 /**
  * Walk `root` and choose files to pack.
  * Directory symlinks stay as one entry, except `node_modules/alchemy` when it
@@ -135,23 +129,32 @@ export async function selectFiles(root: string, options: SelectOptions): Promise
     rejected.push({ path, reason })
   }
 
+  function skipped(rel: string): boolean {
+    const decision = classifyPath(rel, options, includes, excludes)
+
+    if (decision.kind === "exclude") {
+      noteExcluded(rel)
+
+      return true
+    }
+
+    if (decision.kind === "reject") {
+      noteRejected(rel, decision.reason)
+
+      return true
+    }
+
+    return false
+  }
+
   async function walkLinked(realDir: string, logicalDir: string): Promise<void> {
     const entries = await readdir(join(root, realDir), { withFileTypes: true })
 
     for (const entry of entries) {
       const logical = `${logicalDir}/${entry.name}`
       const real = `${realDir}/${entry.name}`
-      const decision = classifyPath(logical, options, includes, excludes)
 
-      if (decision.kind === "exclude") {
-        noteExcluded(logical)
-        continue
-      }
-
-      if (decision.kind === "reject") {
-        noteRejected(logical, decision.reason)
-        continue
-      }
+      if (skipped(logical)) continue
 
       if (entry.isSymbolicLink()) {
         const target = await readlink(join(root, real))
@@ -222,7 +225,7 @@ export async function selectFiles(root: string, options: SelectOptions): Promise
     try {
       info = await stat(join(root, resolved))
     } catch (error) {
-      const code = fsErrorCode(error)
+      const code = nodeErrorCode(error)
 
       if (code === "ENOENT") return false
 
@@ -247,17 +250,8 @@ export async function selectFiles(root: string, options: SelectOptions): Promise
 
     for (const entry of entries) {
       const rel = relDir === "" ? entry.name : `${relDir}/${entry.name}`
-      const decision = classifyPath(rel, options, includes, excludes)
 
-      if (decision.kind === "exclude") {
-        noteExcluded(rel)
-        continue
-      }
-
-      if (decision.kind === "reject") {
-        noteRejected(rel, decision.reason)
-        continue
-      }
+      if (skipped(rel)) continue
 
       if (entry.isSymbolicLink()) {
         if (rel === ALCHEMY_PACKAGE_PATH && (await expandAlchemyLink(rel))) continue
