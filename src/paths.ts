@@ -27,20 +27,20 @@ export function normalizeRelPath(input: string): string | null {
   return parts.join("/")
 }
 
-export function symlinkResolvesInside(fromPath: string, target: string): boolean {
-  if (target.startsWith("/") || /^[A-Za-z]:[\\/]/.test(target)) return false
-  const slash = fromPath.lastIndexOf("/")
-  const dir = slash === -1 ? "" : fromPath.slice(0, slash)
-  const joined = dir ? `${dir}/${target.replace(/\\/g, "/")}` : target.replace(/\\/g, "/")
-
-  return normalizeRelPath(joined) !== null
-}
-
-export function resolvedSymlink(fromPath: string, target: string): string | null {
-  if (!symlinkResolvesInside(fromPath, target)) return null
+/** Resolved package-relative target, or null when `target` is absolute or escapes the root. */
+function linkInsidePackage(fromPath: string, target: string): string | null {
+  if (target.startsWith("/") || /^[A-Za-z]:[\\/]/.test(target)) return null
   const slash = fromPath.lastIndexOf("/")
   const dir = slash === -1 ? "" : fromPath.slice(0, slash)
   const joined = dir ? `${dir}/${target.replace(/\\/g, "/")}` : target.replace(/\\/g, "/")
 
   return normalizeRelPath(joined)
+}
+
+export function symlinkResolvesInside(fromPath: string, target: string): boolean {
+  return linkInsidePackage(fromPath, target) !== null
+}
+
+export function resolvedSymlink(fromPath: string, target: string): string | null {
+  return linkInsidePackage(fromPath, target)
 }
