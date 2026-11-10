@@ -59,7 +59,7 @@ jobs:
         run: nub run check-dist
 
       - name: Dry-run the bundle against a fixture
-        run: node scripts/ci-dry-run.mjs
+        run: nub scripts/ci-dry-run.mjs
 
   pack-large:
     name: Pack a large symlink tree
@@ -83,4 +83,4 @@ jobs:
         run: nub install --frozen-lockfile
 
       - name: Pack a tree over 256 MiB uncompressed
-        run: node --import tsx scripts/pack-large.mjs
+        run: nub scripts/pack-large.mjs
