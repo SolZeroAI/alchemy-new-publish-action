@@ -1,7 +1,7 @@
 import { ActionError } from "./errors.ts"
 import { parseJsonc } from "./jsonc.ts"
 import { canonicalVersion } from "./semver.ts"
-import { isRecord, isString, requiredString } from "./record.ts"
+import { isRecord, isString, requiredString, type JsonObject } from "./record.ts"
 import { normalizeRelPath } from "./paths.ts"
 import { MAX_MANIFEST_BYTES } from "./constants.ts"
 
@@ -21,12 +21,49 @@ export interface Manifest {
   entrypoint: string
 }
 
+const MAX_TAGS = 3
+const MAX_TAG_LENGTH = 24
+const TAG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+
+/**
+ * The registry rejects a release whose `tags` break these limits: at most 3 unique tags,
+ * each at most 24 lowercase letters, digits, and single hyphens.
+ */
+function checkTags(manifest: JsonObject, filename: string) {
+  const tags = manifest.tags
+
+  if (tags === undefined) return
+
+  const names = Array.isArray(tags) ? tags.filter(isString) : []
+
+  if (!Array.isArray(tags) || names.length !== tags.length) {
+    throw new ActionError(`${filename} tags must be an array of strings.`)
+  }
+
+  if (names.length > MAX_TAGS) {
+    throw new ActionError(`${filename} tags lists ${names.length} tags. The limit is ${MAX_TAGS}.`)
+  }
+
+  const invalid = names.filter((tag) => tag.length > MAX_TAG_LENGTH || !TAG_PATTERN.test(tag))
+
+  if (invalid.length > 0) {
+    throw new ActionError(
+      `${filename} tags must be at most ${MAX_TAG_LENGTH} lowercase letters, digits, and single hyphens. Invalid: ${invalid.join(", ")}.`,
+    )
+  }
+
+  if (new Set(names).size !== names.length) {
+    throw new ActionError(`${filename} tags must be unique.`)
+  }
+}
+
 const KNOWN_KEYS = new Set([
   "$schema",
   "schemaVersion",
   "id",
   "name",
   "description",
+  "icon",
   "publisher",
   "source",
   "deployment",
@@ -70,6 +107,12 @@ export function parseManifest(text: string, filename = "alchemy.new.jsonc"): Man
   if (value.schemaVersion !== 1) {
     throw new ActionError(`${filename} schemaVersion must be 1.`)
   }
+
+  if (value.icon !== undefined && !isString(value.icon)) {
+    throw new ActionError(`${filename} icon must be an https:// URL string.`)
+  }
+
+  checkTags(value, filename)
 
   const publisher = value.publisher
 
