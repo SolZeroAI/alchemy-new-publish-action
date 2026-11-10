@@ -431,5 +431,3 @@ function relativeInside(directory: string, filePath: string): string | undefined
 
   return normalized
 }
-
-export { normalizeRegistryUrl }
