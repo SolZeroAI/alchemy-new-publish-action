@@ -1,10 +1,14 @@
 core:changelogs:
-  - content: "---\npackages:\n  npm:alchemy-new-publish-action:\n    type: patch\n---\n\n## What changed\n\nDevelopment typecheck uses tsrs 0.20.0-ts7.1.0-beta. The editor language service uses that package's tsdk launcher at `./node_modules/tsrs/tsdk`. The install script that created `.vscode/tsrs/tsgo` is removed.\n"
-    filename: 2026-10-26-tsrs-0.20-tsdk.md
+  - content: "---\npackages:\n  npm:alchemy-new-publish-action:\n    type: patch\n---\n\n## What changed\n\nOutside-root symlinks fail together. The error names each link path and its target, lists up to 20, and explains that `NPM_CONFIG_ENABLE_GLOBAL_VIRTUAL_STORE=false` keeps nub's store inside the project. Packing warns when a packed `package.json` `exports`, `main`, `module`, or `bin` target was removed by exclude rules. The action sets `file-count` and `size-bytes` from the archive it built, including a dry run and a skipped publish.\n"
+    filename: 2026-10-25-pack-dx.md
+    v: 0.0.0
+  - content: "---\npackages:\n  npm:alchemy-new-publish-action:\n    type: minor\n---\n\n## What changed\n\nThe action now accepts the optional manifest `icon` field, an `https://` URL of a square image. alchemy.new shows it as the package icon. Before this change, the action rejected a manifest with `icon` as an unknown field.\n\nThe action now checks manifest `tags` before it packs: at most 3 unique tags, each at most 24 lowercase letters, digits, and single hyphens. The registry rejects a release that breaks this rule, so a dry run now reports the problem first.\n"
+    filename: 2026-11-10-manifest-icon-tags.md
     v: 0.0.0
 core:packages:
   - changelogIds:
-      - 2026-10-26-tsrs-0.20-tsdk.md
+      - 2026-10-25-pack-dx.md
+      - 2026-11-10-manifest-icon-tags.md
     id: npm:alchemy-new-publish-action
     updated: true
 npm:packages:

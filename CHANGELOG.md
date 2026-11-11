@@ -1,3 +1,15 @@
+## alchemy-new-publish-action@1.1.0
+
+### What changed
+
+Outside-root symlinks fail together. The error names each link path and its target, lists up to 20, and explains that `NPM_CONFIG_ENABLE_GLOBAL_VIRTUAL_STORE=false` keeps nub's store inside the project. Packing warns when a packed `package.json` `exports`, `main`, `module`, or `bin` target was removed by exclude rules. The action sets `file-count` and `size-bytes` from the archive it built, including a dry run and a skipped publish.
+
+### What changed
+
+The action now accepts the optional manifest `icon` field, an `https://` URL of a square image. alchemy.new shows it as the package icon. Before this change, the action rejected a manifest with `icon` as an unknown field.
+
+The action now checks manifest `tags` before it packs: at most 3 unique tags, each at most 24 lowercase letters, digits, and single hyphens. The registry rejects a release that breaks this rule, so a dry run now reports the problem first.
+
 ## alchemy-new-publish-action@1.0.3
 
 ### What changed
