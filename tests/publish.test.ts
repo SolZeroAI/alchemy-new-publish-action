@@ -217,6 +217,93 @@ describe("publish", () => {
     }
   })
 
+  it("succeeds when complete fails after the registry stored this version", async () => {
+    const pkg = await makePackage()
+
+    try {
+      const dry = await publish({
+        path: pkg.root,
+        version: "1.2.3",
+        include: [],
+        exclude: [],
+        defaultExcludes: true,
+        registryUrl: "https://alchemy.new",
+        dryRun: true,
+        onImmutable: "fail",
+      })
+
+      const record: VersionRecord = {
+        org: "example-org",
+        project: "example-stack",
+        version: "1.2.3",
+        sha256: dry.sha256,
+        sizeBytes: dry.sizeBytes,
+        manifestSha256: dry.manifestSha256,
+        yanked: false,
+      }
+
+      let lookups = 0
+      let aborted = false
+
+      const client = (stored: VersionRecord): RegistryClient => ({
+        setToken() {},
+        async exchangeOidc() {
+          throw new Error("exchange")
+        },
+        async getVersion() {
+          lookups += 1
+
+          return lookups === 1 ? undefined : stored
+        },
+        async startUpload() {
+          return { uploadId: "upl_test", partSize: 8 * 1024 * 1024, maxBytes: 256 * 1024 * 1024 }
+        },
+        async uploadPart(input) {
+          return { partNumber: input.partNumber, etag: "etag-1", sizeBytes: 1 }
+        },
+        async uploadManifest(input) {
+          return { sha256: createHash("sha256").update(input.body).digest("hex"), sizeBytes: 1 }
+        },
+        async completeUpload() {
+          throw new Error("The operation was aborted due to timeout")
+        },
+        async abortUpload() {
+          aborted = true
+        },
+      })
+
+      const options = {
+        path: pkg.root,
+        version: "1.2.3",
+        include: [],
+        exclude: [],
+        defaultExcludes: true,
+        registryUrl: "https://alchemy.new",
+        dryRun: false,
+        onImmutable: "fail" as const,
+        token: "anr_test",
+        mask: () => {},
+        writeSummary: async () => {},
+      }
+
+      const result = await publish({ ...options, client: client(record) })
+
+      assert.equal(result.skipped, false)
+      assert.equal(result.sha256, dry.sha256)
+      assert.equal(aborted, false)
+
+      lookups = 0
+
+      await assert.rejects(
+        publish({ ...options, client: client({ ...record, sha256: "f".repeat(64) }) }),
+        /aborted due to timeout/,
+      )
+      assert.equal(aborted, true)
+    } finally {
+      await pkg.cleanup()
+    }
+  })
+
   it("fails a matching publish when on-immutable is fail", async () => {
     const pkg = await makePackage()
     const summaries: string[] = []

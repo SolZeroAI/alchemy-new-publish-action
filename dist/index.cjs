@@ -27155,7 +27155,10 @@ function createRegistryClient(options) {
               sha256: input.sha256,
               manifestSha256: input.manifestSha256,
               parts: input.parts
-            }
+            },
+            // The registry reads and checks the whole archive before it answers.
+            // An 80 MB archive can take more than 30 seconds.
+            timeoutMs: 3e5
           });
           if (result.status !== 200) {
             fail(result.status, result.text, result.headers, "Completing the upload failed");
@@ -27488,9 +27491,22 @@ async function uploadArchive(options) {
       await safeAbort(options, session.uploadId);
       return rethrowOrSkip(error2, options, ensureAuth);
     }
+    const published = await publishedByThisUpload(options);
+    if (published) return { record: published, skipped: false };
     await safeAbort(options, session.uploadId);
     throw error2;
   }
+}
+async function publishedByThisUpload(options) {
+  const found = await options.client.getVersion(options.org, options.project, options.version).catch(() => void 0);
+  if (!found) return void 0;
+  const sameArchive = found.sha256.toLowerCase() === options.sha256;
+  const sameManifest = digest(found.manifestSha256) === options.manifestSha256;
+  if (!sameArchive || !sameManifest) return void 0;
+  options.log.info(
+    `Completing the upload reported an error, but version ${options.version} holds this archive and manifest. The publish succeeded.`
+  );
+  return { ...found, sha256: options.sha256, manifestSha256: options.manifestSha256 };
 }
 async function rethrowOrSkip(cause, options, ensureAuth) {
   if (!(cause instanceof RegistryError) || cause.code !== "immutable_version") {
