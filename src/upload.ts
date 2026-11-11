@@ -257,9 +257,45 @@ export async function uploadArchive(options: {
       return rethrowOrSkip(error, options, ensureAuth)
     }
 
+    const published = await publishedByThisUpload(options)
+
+    if (published) return { record: published, skipped: false }
+
     await safeAbort(options, session.uploadId)
     throw error
   }
+}
+
+/**
+ * A complete request can time out after the registry has stored the version. A retry of
+ * that request then fails. Read the version: when it holds this archive and manifest,
+ * the publish succeeded.
+ */
+async function publishedByThisUpload(options: {
+  client: RegistryClient
+  org: string
+  project: string
+  version: string
+  sha256: string
+  manifestSha256: string
+  log: Logger
+}): Promise<VersionRecord | undefined> {
+  const found = await options.client
+    .getVersion(options.org, options.project, options.version)
+    .catch(() => undefined)
+
+  if (!found) return undefined
+
+  const sameArchive = found.sha256.toLowerCase() === options.sha256
+  const sameManifest = digest(found.manifestSha256) === options.manifestSha256
+
+  if (!sameArchive || !sameManifest) return undefined
+
+  options.log.info(
+    `Completing the upload reported an error, but version ${options.version} holds this archive and manifest. The publish succeeded.`,
+  )
+
+  return { ...found, sha256: options.sha256, manifestSha256: options.manifestSha256 }
 }
 
 async function rethrowOrSkip(

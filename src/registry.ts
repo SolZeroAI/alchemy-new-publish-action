@@ -381,6 +381,9 @@ export function createRegistryClient(options: RegistryClientOptions): RegistryCl
               manifestSha256: input.manifestSha256,
               parts: input.parts,
             },
+            // The registry reads and checks the whole archive before it answers.
+            // An 80 MB archive can take more than 30 seconds.
+            timeoutMs: 300_000,
           })
 
           if (result.status !== 200) {
