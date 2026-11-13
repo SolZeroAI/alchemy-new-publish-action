@@ -44,6 +44,7 @@ jobs:
         run: |
           nub install --frozen-lockfile
           nub run build
+          nub prune --prod
 
       - name: Publish to alchemy.new
         uses: SolZeroAI/alchemy-new-publish-action@v1
@@ -52,7 +53,9 @@ jobs:
           path: .
 ```
 
-Install with the package manager the project actually uses, on `linux/amd64`, and omit dev dependencies. The Alchemy publisher guide uses `nub install --frozen-lockfile`. nub can put its store in a global virtual store outside the project. Links into that store leave the package root. The pack fails on those links and reports each link path and its target. Set `NPM_CONFIG_ENABLE_GLOBAL_VIRTUAL_STORE=false` on the install step so the store stays inside the project. If the package manager keeps its store inside the project (pnpm and Yarn Berry do this when the global virtual store is off), that store has to be inside `path` so links still resolve after extract. A `node_modules/alchemy` symlink into that store is expanded while packing.
+Install with the package manager the project actually uses, on `linux/amd64`. Prune dev dependencies if you like, but first move every deploy-time import into `dependencies` (see below). The Alchemy publisher guide uses `nub install --frozen-lockfile`. nub can put its store in a global virtual store outside the project. Links into that store leave the package root. The pack fails on those links and reports each link path and its target. Set `NPM_CONFIG_ENABLE_GLOBAL_VIRTUAL_STORE=false` on the install step so the store stays inside the project. If the package manager keeps its store inside the project (pnpm and Yarn Berry do this when the global virtual store is off), that store has to be inside `path` so links still resolve after extract. A `node_modules/alchemy` symlink into that store is expanded while packing.
+
+> **Deploy-time imports must be `dependencies`.** alchemy.new runs `alchemy deploy` from the archive and installs nothing. Release CI removes dev dependencies before packing (`nub prune --prod`, `npm prune --omit=dev`, `pnpm install --prod`, `bun install --production`). So every package imported at deploy time must be in `dependencies` of the `package.json` nearest to the file that imports it. That covers the entrypoint, every module it imports (including each workspace package's `infra/`), each Worker `main` that Alchemy bundles, and the `vite.config.*` plus app source that `Website.Vite` builds during the deploy. A package listed only in `devDependencies`, or only in root `overrides`, is removed, and the deploy fails with `Cannot find package '<name>'`. `import type` is erased and does not count. This action checks it before upload (`runtime-import-check`).
 
 A prebuilt archive works too. `org` and `project` are separate inputs so the registry's example works unchanged:
 
@@ -96,22 +99,23 @@ Paste an `anr_` token only. An `anu_` grant cannot be pasted into `token`. The a
 
 ## Inputs
 
-| Input              | Default                                 | Description                                                                                                                |
-| ------------------ | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `package`          | manifest `source`                       | `org/project`. Must match `alchemy.new.jsonc`.                                                                             |
-| `org`              | manifest `source.org`                   | Registry org. Must match the manifest when both are set.                                                                   |
-| `project`          | manifest `source.project`               | Registry project. Must match the manifest when both are set.                                                               |
-| `version`          | git tag, then `source.version`          | Exact semver without build metadata. A tag `v1.2.3` becomes `1.2.3`.                                                       |
-| `archive`          |                                         | Prebuilt `.tar.gz` whose root is the package root. Mutually exclusive with `path`.                                         |
-| `path`             | workspace, when `archive` is omitted    | Directory to pack.                                                                                                         |
-| `manifest`         | `alchemy.new.jsonc` at the package root | Raw manifest file. Uploaded separately. Comments are kept. At most 256 KB.                                                 |
-| `include`          | pack the directory                      | Newline-separated gitignore patterns. Only matching paths are considered.                                                  |
-| `exclude`          |                                         | Extra gitignore patterns, dropped in addition to the defaults.                                                             |
-| `default-excludes` | `true`                                  | Drop VCS metadata, secrets, tests, caches, agent directories, and dev junk. In node_modules, drop *.d.ts, *.map, and *.md. |
-| `registry-url`     | `https://api.alchemy.new`               | API origin. The action appends `/v1/...`. Pre is `https://api-pre.alchemy.new`.                                            |
-| `token`            | OIDC exchange                           | `anr_` API token.                                                                                                          |
-| `dry-run`          | `false`                                 | Validate and write the summary. Do not call the registry.                                                                  |
-| `on-immutable`     | `skip-if-digest-matches`                | Skip when the archive sha256 matches and the manifest sha256 matches if the version record has one. `fail` stops the run.  |
+| Input                  | Default                                 | Description                                                                                                                |
+| ---------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `package`              | manifest `source`                       | `org/project`. Must match `alchemy.new.jsonc`.                                                                             |
+| `org`                  | manifest `source.org`                   | Registry org. Must match the manifest when both are set.                                                                   |
+| `project`              | manifest `source.project`               | Registry project. Must match the manifest when both are set.                                                               |
+| `version`              | git tag, then `source.version`          | Exact semver without build metadata. A tag `v1.2.3` becomes `1.2.3`.                                                       |
+| `archive`              |                                         | Prebuilt `.tar.gz` whose root is the package root. Mutually exclusive with `path`.                                         |
+| `path`                 | workspace, when `archive` is omitted    | Directory to pack.                                                                                                         |
+| `manifest`             | `alchemy.new.jsonc` at the package root | Raw manifest file. Uploaded separately. Comments are kept. At most 256 KB.                                                 |
+| `include`              | pack the directory                      | Newline-separated gitignore patterns. Only matching paths are considered.                                                  |
+| `exclude`              |                                         | Extra gitignore patterns, dropped in addition to the defaults.                                                             |
+| `default-excludes`     | `true`                                  | Drop VCS metadata, secrets, tests, caches, agent directories, and dev junk. In node_modules, drop *.d.ts, *.map, and *.md. |
+| `registry-url`         | `https://api.alchemy.new`               | API origin. The action appends `/v1/...`. Pre is `https://api-pre.alchemy.new`.                                            |
+| `token`                | OIDC exchange                           | `anr_` API token.                                                                                                          |
+| `dry-run`              | `false`                                 | Validate and write the summary. Do not call the registry.                                                                  |
+| `on-immutable`         | `skip-if-digest-matches`                | Skip when the archive sha256 matches and the manifest sha256 matches if the version record has one. `fail` stops the run.  |
+| `runtime-import-check` | `error`                                 | `error` stops the run when a deploy-time import is not in the archive. `warn` logs it. `off` skips the check.              |
 
 `include` and `exclude` accept `#` comments on their own lines.
 
@@ -139,6 +143,7 @@ The action does not install or prune dependencies. It refuses to upload an archi
 - the root `alchemy.new.jsonc` is not a member of the archive. Nested copies may stay. A prebuilt archive that contains a root copy fails before upload
 - `deployment.entrypoint` present in the archive
 - `node_modules/alchemy/bin/cli.js` present as a file, or as a relative symlink to a path inside the package. A directory symlink at `node_modules/alchemy` does not count
+- every package imported at deploy time is in the archive (`runtime-import-check`, default `error`). The entrypoint, the modules it reaches (including workspace `infra/`), each Worker `main`, and a package's `vite.config.*` plus `src/` must resolve. A package only in `devDependencies` or root `overrides` fails. `import type` does not count. A dynamic import outside a Vite config is a warning. `warn` logs the missing packages and continues. `off` skips the check
 - no `.git` or `.alchemy`
 - no secret env file (`.env.example` and `.env.sample` may stay)
 - no `.npmrc`

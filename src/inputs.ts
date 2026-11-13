@@ -1,6 +1,7 @@
 import { DEFAULT_REGISTRY_URL } from "./constants.ts"
 import { ActionError } from "./errors.ts"
 import { isString } from "./record.ts"
+import type { RuntimeImportCheck } from "./runtime-imports.ts"
 import type { OnImmutable } from "./upload.ts"
 
 interface ActionInputs {
@@ -18,6 +19,7 @@ interface ActionInputs {
   token?: string
   dryRun: boolean
   onImmutable: OnImmutable
+  runtimeImportCheck: RuntimeImportCheck
 }
 
 export function parseList(value: string | readonly string[] | undefined): string[] {
@@ -33,6 +35,15 @@ function parseBoolean(name: string, value: string | undefined, fallback: boolean
 
   if (value === "false" || value === "False" || value === "FALSE") return false
   throw new ActionError(`Input ${name} must be true or false. Received ${JSON.stringify(value)}.`)
+}
+
+function parseRuntimeImportCheck(value: string | undefined): RuntimeImportCheck {
+  const mode = blank(value) ?? "error"
+
+  if (mode === "error" || mode === "warn" || mode === "off") return mode
+  throw new ActionError(
+    `Input runtime-import-check must be "error", "warn", or "off". Received ${JSON.stringify(mode)}.`,
+  )
 }
 
 function blank(value: string | undefined): string | undefined {
@@ -57,6 +68,7 @@ export function parseActionInputs(raw: {
   token?: string
   dryRun?: string
   onImmutable?: string
+  runtimeImportCheck?: string
 }): ActionInputs {
   const onImmutable = blank(raw.onImmutable) ?? "skip-if-digest-matches"
 
@@ -73,6 +85,7 @@ export function parseActionInputs(raw: {
     registryUrl: blank(raw.registryUrl) ?? DEFAULT_REGISTRY_URL,
     dryRun: parseBoolean("dry-run", raw.dryRun, false),
     onImmutable,
+    runtimeImportCheck: parseRuntimeImportCheck(raw.runtimeImportCheck),
   }
 
   const packageInput = blank(raw.package)

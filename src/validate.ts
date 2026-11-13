@@ -88,7 +88,7 @@ export function assertReadyArchive(entries: readonly ArchiveEntry[], manifest: M
   assertArchiveMember(
     files,
     CLI_PATH,
-    `Archive is missing ${CLI_PATH}. Install production dependencies on linux/amd64 before packing. alchemy.new does not install them.`,
+    `Archive is missing ${CLI_PATH}. Install dependencies on linux/amd64 before packing; alchemy.new installs nothing. Keep alchemy, and every package the stack imports at deploy time, in "dependencies" so a production prune keeps them.`,
   )
 }
 
