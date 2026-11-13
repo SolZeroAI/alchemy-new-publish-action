@@ -1,10 +1,10 @@
 core:changelogs:
-  - content: "---\npackages:\n  npm:alchemy-new-publish-action:\n    type: patch\n---\n\n## What changed\n\nThe action now waits up to 5 minutes for the registry to finish an upload. The registry reads and checks the whole archive before it answers, and an 80 MB archive can take more than 30 seconds. Before this change, the action stopped waiting after 30 seconds, and the retry failed with \"The specified multipart upload does not exist\".\n\nIf completing the upload reports an error but the registry already holds the version with the same archive and manifest digests, the action reports a successful publish.\n"
-    filename: 2026-11-11-slow-complete-upload.md
+  - content: "---\npackages:\n  npm:alchemy-new-publish-action:\n    type: minor\n---\n\n## What changed\n\nThe action refuses an archive that imports a package the deploy cannot resolve. alchemy.new installs nothing and runs `alchemy deploy` from the archive, so a package that release CI pruned out of `devDependencies` fails the deploy with `Cannot find package`. The check names the missing package, the file that imports it, and the `package.json` that should list it under `dependencies`. Set `runtime-import-check` to `warn` or `off` to change this.\n"
+    filename: 2026-11-13-runtime-import-check.md
     v: 0.0.0
 core:packages:
   - changelogIds:
-      - 2026-11-11-slow-complete-upload.md
+      - 2026-11-13-runtime-import-check.md
     id: npm:alchemy-new-publish-action
     updated: true
 npm:packages:
