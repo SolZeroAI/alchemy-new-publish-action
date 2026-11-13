@@ -11,6 +11,7 @@ describe("parseActionInputs", () => {
     assert.equal(inputs.dryRun, false)
     assert.equal(inputs.defaultExcludes, true)
     assert.equal(inputs.onImmutable, "skip-if-digest-matches")
+    assert.equal(inputs.runtimeImportCheck, "error")
     assert.equal(inputs.token, undefined)
   })
 
@@ -52,5 +53,12 @@ describe("parseActionInputs", () => {
 
   it("rejects a bad on-immutable value", () => {
     assert.throws(() => parseActionInputs({ onImmutable: "replace" }), /on-immutable/)
+  })
+
+  it("parses runtime-import-check and rejects an unknown mode", () => {
+    assert.equal(parseActionInputs({ runtimeImportCheck: " warn " }).runtimeImportCheck, "warn")
+    assert.equal(parseActionInputs({ runtimeImportCheck: "off" }).runtimeImportCheck, "off")
+    assert.equal(parseActionInputs({ runtimeImportCheck: "  " }).runtimeImportCheck, "error")
+    assert.throws(() => parseActionInputs({ runtimeImportCheck: "strict" }), /runtime-import-check/)
   })
 })

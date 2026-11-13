@@ -18,8 +18,10 @@
   },
   "dependencies": {
     "@actions/core": "^3.0.1",
+    "es-module-lexer": "^3.0.4",
     "ignore": "^7.0.5",
     "minizlib": "^3.1.0",
+    "sucrase": "^3.35.1",
     "tar": "^7.5.22"
   },
   "devDependencies": {

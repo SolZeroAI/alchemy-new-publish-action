@@ -25,6 +25,7 @@ export async function run(): Promise<void> {
       token,
       dryRun: core.getInput("dry-run"),
       onImmutable: core.getInput("on-immutable"),
+      runtimeImportCheck: core.getInput("runtime-import-check"),
     })
 
     const gitRef = process.env.GITHUB_REF

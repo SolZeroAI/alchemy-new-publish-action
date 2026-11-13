@@ -40,6 +40,7 @@ import { authorize } from "./auth.ts"
 import { uploadArchive, type OnImmutable } from "./upload.ts"
 import { deployUrl, renderSummary } from "./summary.ts"
 import type { Sleep } from "./retry.ts"
+import { assertRuntimeImports, type RuntimeImportCheck } from "./runtime-imports.ts"
 
 interface PublishOptions {
   packageInput?: string
@@ -56,6 +57,8 @@ interface PublishOptions {
   token?: string
   dryRun: boolean
   onImmutable: OnImmutable
+  /** Missing deploy-time imports. Default error. off skips the check. */
+  runtimeImportCheck?: RuntimeImportCheck
   gitRef?: string
   workspace?: string
   client?: RegistryClient
@@ -159,6 +162,12 @@ export async function publish(options: PublishOptions): Promise<PublishResult> {
   assertNoRootManifest(entries)
   const loaded = prepared.loaded ?? (await loadManifest(resolveManifestFile(options)))
   assertReadyArchive(entries, loaded.manifest)
+  await assertRuntimeImports(
+    prepared.archivePath,
+    loaded.manifest.entrypoint,
+    options.runtimeImportCheck ?? "error",
+    log,
+  )
 
   const pkg = resolvePackage({
     packageInput: options.packageInput,

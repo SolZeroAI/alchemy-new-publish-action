@@ -51,6 +51,10 @@ inputs:
     description: "When the version is already published. skip-if-digest-matches (default) succeeds when the archive sha256 matches and, when the version record includes it, the manifest sha256 matches. fail stops the run. A different digest still fails."
     required: false
     default: skip-if-digest-matches
+  runtime-import-check:
+    description: "error (default) stops the run when the archive imports a package that is not installed where Node looks. warn logs those packages and continues. off skips the check. alchemy.new installs nothing, so a deploy-time import that release CI pruned out of devDependencies fails the deploy."
+    required: false
+    default: error
 outputs:
   version:
     description: Published version, without a leading v.
