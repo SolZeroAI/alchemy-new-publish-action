@@ -48,9 +48,6 @@ importers:
       tsrs:
         specifier: 0.23.0-ts7.1.0-beta
         version: 0.23.0-ts7.1.0-beta
-      tsx:
-        specifier: ^4.20.6
-        version: 4.23.15
       typescript:
         specifier: 7.0.2
         version: 7.0.2
@@ -712,11 +709,6 @@ packages:
       picomatch:
         optional: true
 
-  fsevents@2.3.3:
-    resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
-    engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
-    os: [darwin]
-
   ignore@7.0.14:
     resolution: {integrity: sha512-wCBiZ77u1tuWde6G/nfOtLaCTYcFDU5yCzARzK10y+rLhzYoL7a7yEemcopcc2Mzow7gZOIjnV2ym1NYmdiJOQ==}
     engines: {node: '>= 4'}
@@ -832,11 +824,6 @@ packages:
   tsrs@0.23.0-ts7.1.0-beta:
     resolution: {integrity: sha512-A7UU5bUA8caDkidkMfrfeF4etU92ODZxasCqIb1eaJ36+BAZgyZ6Znq7NVu/c1HFG57E6la/TeofpZhPdgmLBw==}
     engines: {node: '>=16.20.0'}
-    hasBin: true
-
-  tsx@4.23.15:
-    resolution: {integrity: sha512-Yiex1Ovn8z2xPpOWckIiysV1SSyRMY9BkLF++q0yKiDxCqRhosKfMg3janKkiLBwZ5c/YryloKwGZcrEmtwxKw==}
-    engines: {node: '>=18.0.0'}
     hasBin: true
 
   tunnel@0.0.6:
@@ -1244,9 +1231,6 @@ snapshots:
     dependencies:
       picomatch: 4.0.7
 
-  fsevents@2.3.3:
-    optional: true
-
   ignore@7.0.14: {}
 
   lines-and-columns@1.2.4: {}
@@ -1381,14 +1365,6 @@ snapshots:
       '@tsrs/linux-x64-gnu': 0.23.0-ts7.1.0-beta
       '@tsrs/linux-x64-musl': 0.23.0-ts7.1.0-beta
       '@tsrs/win32-x64': 0.23.0-ts7.1.0-beta
-
-  tsx@4.23.15:
-    dependencies:
-      esbuild: 0.28.2
-    optionalDependencies:
-      fsevents: 2.3.3
-    transitivePeerDependencies:
-      - pnpapi
 
   tunnel@0.0.6: {}
 
