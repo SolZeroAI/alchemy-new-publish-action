@@ -16,7 +16,7 @@ nub scripts/pack-large.mjs
 
 `nub run check` typechecks with `tsrs --noEmit`, runs oxlint, checks formatting with oxfmt, runs the unit tests, and builds `dist/index.cjs`. Commit `dist/index.cjs` with the source change. CI rejects a pull request whose bundle does not match `nub run build`.
 
-`nub.lock` is the lockfile. Do not add `package-lock.json`; nub stays in npm mode while that file exists. Do not add ESLint, Prettier, Biome, or dprint. Lint and format are oxlint `1.93.0` and oxfmt `0.78.0`. `oxlint.config.ts` extends `recommended` from `oxlint-plugin-solzero`. That config loads anti-slop from the plugin, enables every anti-slop rule as an error, and enables `oxc/no-accumulating-spread`. A plugin update that adds an anti-slop rule enables it here too. `no-runtime-typeof` allows `typeof` only inside a type predicate (`allowInTypeGuards`). This package has no Effect code, so the config does not call `effectRules()`. The shared config still enables the anti-slop Effect rules.
+`nub.lock` is the lockfile. Do not add `package-lock.json`; nub stays in npm mode while that file exists. Do not add ESLint, Prettier, Biome, or dprint. Lint and format are oxlint `1.94.0` and oxfmt `0.79.0`. `oxlint.config.ts` extends `recommended` from `oxlint-plugin-solzero`. That config loads anti-slop from the plugin, enables every anti-slop rule as an error, and enables `oxc/no-accumulating-spread`. A plugin update that adds an anti-slop rule enables it here too. `no-runtime-typeof` allows `typeof` only inside a type predicate (`allowInTypeGuards`). This package has no Effect code, so the config does not call `effectRules()`. The shared config still enables the anti-slop Effect rules.
 
 ## Why this is a JavaScript action
 
@@ -48,7 +48,7 @@ One paragraph.
 
 When a pull request does not change the published action, add the GitHub label `release:none` and do not add a `.tegami/` entry. The label has to exist on the repository before Tegami will honor it.
 
-`.github/workflows/release.yml` runs after the Validate workflow succeeds on a push to `master`. The job mints a GitHub App installation token with `actions/create-github-app-token@v3`. Secrets `RELEASE_APP_ID` and `RELEASE_APP_PRIVATE_KEY` identify the app. The token is limited to this repository and requests contents write and pull requests write. Checkout and `nub run tegami ci` use that token. The floating `v1` tag move uses the same token.
+`.github/workflows/release.yml` runs after the Validate workflow succeeds on a push to `master`. The job mints a GitHub App installation token with `actions/create-github-app-token@v3`. Secrets `RELEASE_APP_CLIENT_ID` and `RELEASE_APP_PRIVATE_KEY` identify the app, and the workflow passes that client id. The token is limited to this repository and requests contents write and pull requests write. Checkout and `nub run tegami ci` use that token. The floating `v1` tag move uses the same token.
 
 1. A push that adds changelog files versions the package and opens a pull request from `tegami/version-packages` onto `master`. The app opens that pull request, so GitHub starts Validate and Tegami PR Preview.
 2. Merging that pull request leaves a publish lock on `master`. The next run creates the GitHub release and the immutable tag `alchemy-new-publish-action@1.2.3`. `scripts/action-release.mts` does that step. Tegami's npm publish does not run for this private package.

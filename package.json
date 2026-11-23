@@ -5,15 +5,15 @@
   "description": "GitHub Action that publishes a ready archive to the alchemy.new package registry.",
   "type": "module",
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node24 --format=cjs --outfile=dist/index.cjs --banner:js=\"/* alchemy-new-publish-action */\" && node --import tsx scripts/normalize-bundle.mts",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node24 --format=cjs --outfile=dist/index.cjs --banner:js=\"/* alchemy-new-publish-action */\" && nub scripts/normalize-bundle.mts",
     "check": "nub run typecheck && nub run lint && nub run format && nub run test && nub run build",
     "check-dist": "nub run build && git diff --exit-code -- dist",
     "format": "oxfmt --check",
     "format:fix": "oxfmt",
     "lint": "oxlint --deny-warnings",
     "lint:fix": "oxlint --fix",
-    "test": "node --import tsx --test tests/**/*.test.ts",
-    "tegami": "tsx scripts/tegami.mts",
+    "test": "nub --test tests/**/*.test.ts",
+    "tegami": "nub scripts/tegami.mts",
     "typecheck": "tsrs --noEmit"
   },
   "dependencies": {
@@ -27,12 +27,11 @@
   "devDependencies": {
     "@types/node": "^24.10.1",
     "esbuild": "^0.28.2",
-    "oxfmt": "0.78.0",
-    "oxlint": "1.93.0",
+    "oxfmt": "0.79.0",
+    "oxlint": "1.94.0",
     "oxlint-plugin-solzero": "0.1.0",
     "tegami": "1.5.0",
     "tsrs": "0.25.0-ts7.1.0-beta",
-    "tsx": "^4.20.6",
     "typescript": "7.0.2"
   },
   "devEngines": {
