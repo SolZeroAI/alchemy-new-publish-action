@@ -12,24 +12,13 @@ const release = tegami({
     updateLockFile: false,
   },
   plugins: [
-    // github() opens the version pull request. The package is private, so that
-    // plugin does not publish to npm or create the release tag. actionRelease()
-    // creates the GitHub release and the name@version tag from the publish lock.
+    // github() opens the version pull request. The package is private, so Tegami
+    // does not publish it to npm. release: false keeps this plugin from
+    // registering a release task. actionRelease() creates the GitHub release
+    // and the name@version tag from the publish lock.
     github({
       repo: repository,
-      release: {
-        eager: false,
-        create({ pkg, plan }) {
-          const sections = (plan.packages.get(pkg.id)?.changelogs ?? []).flatMap((entry) =>
-            entry.sections.flatMap((section) => [`### ${section.title}`, "", section.content, ""]),
-          )
-
-          return {
-            title: `alchemy-new-publish-action v${pkg.version}`,
-            notes: sections.join("\n").trim(),
-          }
-        },
-      },
+      release: false,
       versionPr: {
         base: "master",
         branch: "tegami/version-packages",
