@@ -1,10 +1,10 @@
 core:changelogs:
-  - content: "---\npackages:\n  npm:alchemy-new-publish-action:\n    type: minor\n---\n\n## What changed\n\nThe action refuses an archive that imports a package the deploy cannot resolve. alchemy.new installs nothing and runs `alchemy deploy` from the archive, so a package that release CI pruned out of `devDependencies` fails the deploy with `Cannot find package`. The check names the missing package, the file that imports it, and the `package.json` that should list it under `dependencies`. Set `runtime-import-check` to `warn` or `off` to change this.\n"
-    filename: 2026-11-13-runtime-import-check.md
+  - content: "---\npackages:\n  npm:alchemy-new-publish-action:\n    type: patch\n---\n\n## What changed\n\nThe default registry origin is https://alchemy.new. The web host routes `/v1/*` to the API Worker, which has no hostname of its own. Pre is https://pre.alchemy.new. Set `registry-url` to publish there. The OIDC audience stays `https://alchemy.new/registry/publish`.\n"
+    filename: 2026-11-27-registry-origin.md
     v: 0.0.0
 core:packages:
   - changelogIds:
-      - 2026-11-13-runtime-import-check.md
+      - 2026-11-27-registry-origin.md
     id: npm:alchemy-new-publish-action
     updated: true
 npm:packages:
