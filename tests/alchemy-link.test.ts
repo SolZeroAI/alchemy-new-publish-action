@@ -78,7 +78,7 @@ const publishOptions = (root: string) => {
     include,
     exclude,
     defaultExcludes: true,
-    registryUrl: "https://api.alchemy.new",
+    registryUrl: "https://alchemy.new",
     dryRun: true,
     onImmutable: "fail" as const,
     fetchImpl: async () => {

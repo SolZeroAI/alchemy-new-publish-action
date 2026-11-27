@@ -44903,7 +44903,7 @@ var RegistryError = class extends ActionError {
 
 // src/constants.ts
 var OIDC_AUDIENCE = "https://alchemy.new/registry/publish";
-var DEFAULT_REGISTRY_URL = "https://api.alchemy.new";
+var DEFAULT_REGISTRY_URL = "https://alchemy.new";
 var DEPLOY_SITE = "https://alchemy.new";
 var MANIFEST_FILENAME = "alchemy.new.jsonc";
 var ALCHEMY_PACKAGE_PATH = "node_modules/alchemy";

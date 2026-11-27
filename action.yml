@@ -38,8 +38,9 @@ inputs:
     required: false
     default: "true"
   registry-url:
-    description: Registry API origin. Defaults to https://api.alchemy.new. The action appends /v1/.... Pass https://api-pre.alchemy.new for pre. The website at alchemy.new does not serve this API.
+    description: Registry API origin. Defaults to https://alchemy.new. The action appends /v1/.... Pass https://pre.alchemy.new for pre.
     required: false
+    default: "https://alchemy.new"
   token:
     description: Optional anr_ API token. When omitted, the action exchanges a GitHub OIDC token. Never printed.
     required: false

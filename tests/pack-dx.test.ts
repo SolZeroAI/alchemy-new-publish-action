@@ -37,7 +37,7 @@ const publishBase = {
   include: new Array<string>(),
   exclude: new Array<string>(),
   defaultExcludes: true,
-  registryUrl: "https://api.alchemy.new",
+  registryUrl: "https://alchemy.new",
   dryRun: true,
   onImmutable: "fail" as const,
   fetchImpl: async () => {
