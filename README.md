@@ -111,7 +111,7 @@ Paste an `anr_` token only. An `anu_` grant cannot be pasted into `token`. The a
 | `include`              | pack the directory                      | Newline-separated gitignore patterns. Only matching paths are considered.                                                  |
 | `exclude`              |                                         | Extra gitignore patterns, dropped in addition to the defaults.                                                             |
 | `default-excludes`     | `true`                                  | Drop VCS metadata, secrets, tests, caches, agent directories, and dev junk. In node_modules, drop *.d.ts, *.map, and *.md. |
-| `registry-url`         | `https://api.alchemy.new`               | API origin. The action appends `/v1/...`. Pre is `https://api-pre.alchemy.new`.                                            |
+| `registry-url`         | `https://alchemy.new`                   | API origin. The action appends `/v1/...`. Pre is `https://pre.alchemy.new`.                                                |
 | `token`                | OIDC exchange                           | `anr_` API token.                                                                                                          |
 | `dry-run`              | `false`                                 | Validate and write the summary. Do not call the registry.                                                                  |
 | `on-immutable`         | `skip-if-digest-matches`                | Skip when the archive sha256 matches and the manifest sha256 matches if the version record has one. `fail` stops the run.  |
@@ -221,7 +221,7 @@ This action does not yank, deprecate, mint tokens, or submit a listing. `POST /v
 
 ## Contract notes
 
-Production is `https://api.alchemy.new`. That origin is the default `registry-url`. Pre is `https://api-pre.alchemy.new`. Set `registry-url` to publish there. `https://alchemy.new` is the website. A request to `https://alchemy.new/v1/...` returns HTTP 500 `{"error":"Only HTML requests are supported here"}`. The deploy URL stays on `https://alchemy.new`.
+Production is `https://alchemy.new`. That origin is the default `registry-url`. The API Worker has no hostname of its own. The web host routes `/v1/*` to it, so `GET /v1/packages/...` is served on `https://alchemy.new`. Pre is `https://pre.alchemy.new`. Set `registry-url` to publish there. The deploy URL stays on `https://alchemy.new`.
 
 The OpenAPI document fetched while this action was written does not list `/v1/oidc/github/exchange` or `/v1/packages/...` yet. Those routes are the unpublished registry contract this action implements. `GET /v1/packages/example-org/example-stack` returned an empty 404. Nothing here was uploaded to a live registry.
 

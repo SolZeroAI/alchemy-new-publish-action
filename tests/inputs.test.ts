@@ -6,8 +6,8 @@ import { DEFAULT_REGISTRY_URL } from "../src/constants.ts"
 describe("parseActionInputs", () => {
   it("applies defaults", () => {
     const inputs = parseActionInputs({})
-    assert.equal(DEFAULT_REGISTRY_URL, "https://api.alchemy.new")
-    assert.equal(inputs.registryUrl, "https://api.alchemy.new")
+    assert.equal(DEFAULT_REGISTRY_URL, "https://alchemy.new")
+    assert.equal(inputs.registryUrl, "https://alchemy.new")
     assert.equal(inputs.dryRun, false)
     assert.equal(inputs.defaultExcludes, true)
     assert.equal(inputs.onImmutable, "skip-if-digest-matches")
@@ -27,12 +27,12 @@ describe("parseActionInputs", () => {
 
   it("falls back to production when registry-url is blank", () => {
     const inputs = parseActionInputs({ registryUrl: "  " })
-    assert.equal(inputs.registryUrl, "https://api.alchemy.new")
+    assert.equal(inputs.registryUrl, "https://alchemy.new")
   })
 
   it("keeps an explicit registry-url", () => {
-    const inputs = parseActionInputs({ registryUrl: " https://api-pre.alchemy.new " })
-    assert.equal(inputs.registryUrl, "https://api-pre.alchemy.new")
+    const inputs = parseActionInputs({ registryUrl: " https://pre.alchemy.new " })
+    assert.equal(inputs.registryUrl, "https://pre.alchemy.new")
   })
 
   it("parses lists and booleans", () => {

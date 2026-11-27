@@ -2,13 +2,13 @@
 export const OIDC_AUDIENCE = "https://alchemy.new/registry/publish"
 
 /**
- * Production API origin.
- * https://alchemy.new serves the website and rejects `/v1` calls.
- * Pre is https://api-pre.alchemy.new. Pass that origin in `registry-url`.
+ * Production registry origin.
+ * The web host routes `/v1/*` to the API Worker. The action appends `/v1/...`.
+ * Pre is https://pre.alchemy.new. Pass that origin in `registry-url`.
  */
-export const DEFAULT_REGISTRY_URL = "https://api.alchemy.new"
+export const DEFAULT_REGISTRY_URL = "https://alchemy.new"
 
-/** Public deploy site. Distinct from the API origin. */
+/** Deploy page origin for a published version. */
 export const DEPLOY_SITE = "https://alchemy.new"
 
 export const MANIFEST_FILENAME = "alchemy.new.jsonc"

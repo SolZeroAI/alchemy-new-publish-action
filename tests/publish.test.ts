@@ -613,7 +613,7 @@ describe("publish", () => {
       })
       assert.ok(
         log.lines.includes(
-          "registry-url uses http (http://example.test). Production is https://api.alchemy.new.",
+          "registry-url uses http (http://example.test). Production is https://alchemy.new.",
         ),
       )
     } finally {
